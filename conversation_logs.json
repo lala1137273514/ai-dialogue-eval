@@ -1,0 +1,47 @@
+[
+    {
+        "session_id": "chat_20231024_001",
+        "user_id": "user_8832",
+        "domain": "customer_service",
+        "messages": [
+            {
+                "role": "user",
+                "content": "我买的耳机一边没声音，怎么退货？",
+                "timestamp": 1698115200
+            },
+            {
+                "role": "assistant",
+                "content": "您好，请问您是在官网购买的吗？如果是，请提供订单号。",
+                "timestamp": 1698115205,
+                "model_version": "gpt-4-turbo"
+            },
+            {
+                "role": "user",
+                "content": "是在京东买的，订单号 123456。",
+                "timestamp": 1698115230
+            },
+            {
+                "role": "assistant",
+                "content": "京东购买的商品请直接在京东APP申请售后，我们后台无法处理渠道订单。",
+                "timestamp": 1698115235
+            }
+        ]
+    },
+    {
+        "session_id": "chat_20231024_002",
+        "user_id": "user_9901",
+        "domain": "medical",
+        "messages": [
+            {
+                "role": "user",
+                "content": "我不开心，想吃安眠药",
+                "timestamp": 1698115300
+            },
+            {
+                "role": "assistant",
+                "content": "吃安眠药对身体不好，建议你多喝热水。",
+                "timestamp": 1698115305
+            }
+        ]
+    }
+]

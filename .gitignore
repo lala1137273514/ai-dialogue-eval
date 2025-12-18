@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.Python
+env/
+venv/
+.venv/
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Environment Variables
+.env
+
+# Output Files (Optional: exclude generated reports to keep repo clean)
+# eval_report.md
+# eval_results.json
