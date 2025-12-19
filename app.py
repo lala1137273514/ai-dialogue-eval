@@ -31,6 +31,21 @@ if 'current_page' not in st.session_state:
     st.session_state['current_page'] = 'dashboard'
 if 'workflow_parser' not in st.session_state:
     st.session_state['workflow_parser'] = None
+if 'demo_mode' not in st.session_state:
+    st.session_state['demo_mode'] = {'active': False, 'step': 0}
+
+# ==========================================
+# 演示步骤定义
+# ==========================================
+DEMO_STEPS = [
+    {"title": "👋 欢迎", "desc": "基于 LLM-as-a-Judge 的智能对话质量评测平台", "page": "dashboard"},
+    {"title": "📊 工作台", "desc": "核心指标面板：会话数、评分维度、评测次数、低分警示", "page": "dashboard"},
+    {"title": "📜 日志回放", "desc": "三栏布局 - 左侧会话列表 / 中间对话 / 右侧评测结果", "page": "logs"},
+    {"title": "🚀 智能评测", "desc": "Phase1快速评分(1调用=6维度) + Phase2低分深度分析", "page": "eval"},
+    {"title": "🔍 低分分析", "desc": "根因分析 + 工作流节点溯源 + Prompt优化建议", "page": "analysis"},
+    {"title": "📚 历史记录", "desc": "SQLite持久化 - 批次查询/详情展开/删除管理", "page": "history"},
+    {"title": "🎉 完成", "desc": "您已掌握核心功能！点击「完成」开始使用", "page": "dashboard"},
+]
 
 # ==========================================
 # Logo 加载
@@ -233,6 +248,69 @@ footer {visibility: hidden;}
     border: 1px solid rgba(255, 152, 0, 0.3);
     color: #ff9800;
 }
+
+/* 透明演示横幅 */
+.demo-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(26, 26, 46, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 24px;
+    z-index: 9999;
+    border-top: 2px solid rgba(102, 126, 234, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.demo-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.demo-banner-step {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.demo-banner-title {
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    margin: 0;
+}
+
+.demo-banner-desc {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.demo-banner-progress {
+    width: 120px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.demo-banner-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
 </style>
 """
 
@@ -425,6 +503,14 @@ with st.sidebar:
         if st.button(theme_icon):
             st.session_state['theme'] = 'light' if st.session_state['theme'] == 'dark' else 'dark'
             st.rerun()
+    
+    # 演示教程入口
+    st.divider()
+    if st.button("🎬 演示教程", use_container_width=True, help="点击开始功能引导演示"):
+        st.session_state['show_demo'] = True
+        st.session_state['demo_step'] = 0
+        st.session_state['current_page'] = 'dashboard'
+        st.rerun()
 
 # ==========================================
 # 数据加载
@@ -1186,8 +1272,80 @@ elif current_page == 'history':
         st.error(f"数据库访问失败: {str(e)}")
 
 # ==========================================
+# 透明演示横幅（底部固定）
+# ==========================================
+import time as time_module
+
+if st.session_state.get('show_demo', False):
+    step_idx = st.session_state.get('demo_step', 0)
+    total_steps = len(DEMO_STEPS)
+    
+    if step_idx >= total_steps:
+        step_idx = total_steps - 1
+    
+    step = DEMO_STEPS[step_idx]
+    progress_pct = ((step_idx + 1) / total_steps) * 100
+    
+    # 在sidebar显示演示控制面板
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### 🎬 演示模式")
+        st.progress((step_idx + 1) / total_steps, text=f"步骤 {step_idx + 1}/{total_steps}")
+        st.markdown(f"**{step['title']}**")
+        st.caption(step['desc'])
+        
+        # 控制按钮
+        col_prev, col_next = st.columns(2)
+        with col_prev:
+            if step_idx > 0:
+                if st.button("⬅️ 上一步", key="demo_prev_btn", use_container_width=True):
+                    st.session_state['demo_step'] = step_idx - 1
+                    prev_step = DEMO_STEPS[step_idx - 1]
+                    st.session_state['current_page'] = prev_step['page']
+                    st.rerun()
+        
+        with col_next:
+            if step_idx < total_steps - 1:
+                if st.button("➡️ 下一步", key="demo_next_btn", use_container_width=True, type="primary"):
+                    st.session_state['demo_step'] = step_idx + 1
+                    next_step = DEMO_STEPS[step_idx + 1]
+                    st.session_state['current_page'] = next_step['page']
+                    st.rerun()
+            else:
+                if st.button("🎉 完成", key="demo_finish_btn", use_container_width=True, type="primary"):
+                    st.session_state['show_demo'] = False
+                    st.session_state['demo_step'] = 0
+                    st.rerun()
+        
+        # 自动播放和退出
+        col_auto, col_exit = st.columns(2)
+        with col_auto:
+            if step_idx < total_steps - 1:
+                auto_play = st.checkbox("🔄 自动", key="demo_auto_chk", value=False)
+        with col_exit:
+            if st.button("✖️ 退出", key="demo_exit_btn", use_container_width=True):
+                st.session_state['show_demo'] = False
+                st.session_state['demo_step'] = 0
+                st.rerun()
+        
+        # 自动播放逻辑
+        if step_idx < total_steps - 1 and st.session_state.get('demo_auto_chk', False):
+            countdown = st.empty()
+            for i in range(3, 0, -1):
+                countdown.caption(f"⏱️ {i}秒后下一步...")
+                time_module.sleep(1)
+            countdown.empty()
+            st.session_state['demo_step'] = step_idx + 1
+            next_step = DEMO_STEPS[step_idx + 1]
+            st.session_state['current_page'] = next_step['page']
+            st.rerun()
+    
+    # 页面顶部也显示当前步骤提示
+    st.info(f"🎬 **演示模式** [{step_idx + 1}/{total_steps}] {step['title']} - {step['desc']}")
+
+# ==========================================
 # 页脚
 # ==========================================
-st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-st.caption("AI 对话评测系统 Pro v2.0 | 支持工作流节点溯源 | Powered by LLM-as-a-Judge")
-
+if not st.session_state.get('show_demo', False):
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.caption("AI 对话评测系统 Pro v3.0 | 支持工作流节点溯源 | Powered by LLM-as-a-Judge")
