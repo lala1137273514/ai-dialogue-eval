@@ -324,100 +324,356 @@
 
 ---
 
-## 一、现有系统分析
+## 一、升级核心目的
 
-### 1.1 当前架构概览
+### 1.1 一句话总结
 
-基于对现有代码的分析，系统核心模块包括：
+> **从「离线跑一次看结果的多轮对话评测」升级为「每次调用都有记录、可追踪、可分析的统一可观测性平台」**
+
+### 1.2 升级驱动力 (WHY)
+
+| 当前痛点 | 升级目标 | 业务价值 |
+|:---|:---|:---|
+| 只能评测多轮对话 | 兼容单轮 Prompt、多轮对话、Agent 工作流 | 覆盖 CEO 大模型、交付 Agent 等场景 |
+| 评测结果只存文件 | 所有调用可追踪 (Trace)、可查询、可分析 | 快速定位质量问题 |
+| 无法快速定位问题 | Bad Case 快速定位 → Prompt 优化闭环 | 持续改进 AI 输出质量 |
+| 手动跑脚本评测 | 自动记录、自动评分 | 降低人工成本 |
+
+### 1.3 升级价值矩阵
+
+```
+升级前:                                   升级后:
+┌───────────────────┐                    ┌────────────────────────────────┐
+│ 多轮对话评测       │                    │ 统一 Agent 可观测性平台         │
+│                   │                    │                                │
+│ • 评测多轮对话     │        →           │ • 单轮/多轮/Agent 全覆盖       │
+│ • 输出 JSON 文件   │                    │ • SQLite 持久化 + Trace 追踪   │
+│ • 一次性看结果     │                    │ • 历史可查 + 统计可视化        │
+│ • 手动定位问题     │                    │ • Bad Case 自动标记 + 优化闭环 │
+└───────────────────┘                    └────────────────────────────────┘
+```
+
+---
+
+## 二、升级内容详解 (WHAT)
+
+### 2.1 评测范围扩展
+
+| 评测类型 | 输入数据 | 评测维度 | 适用场景 |
+|:---|:---|:---|:---|
+| **单轮 (single_turn)** | 1个 Prompt + 1个 Response | 准确性、相关性、完整性、清晰度 | 销售成绩分析、单次问答 |
+| **多轮 (multi_turn)** | 完整对话 Session | 上下文连贯、意图理解、主动引导、目标完成 | 客服对话、营销沟通 |
+| **Agent** | 任务 + 工具调用 + 决策过程 | 任务完成率、工具选择准确性、决策质量、执行效率 | 交付 Agent、自动化工作流 |
+
+### 2.2 新增 Trace 追踪能力
+
+```
+升级前:                              升级后:
+                                    
+评测脚本 → JSON输出 → 手动查看       评测脚本 → SQLite → Trace 可视化
+         ↓                                     ↓
+    一次性结果                        ┌─────────────────────────┐
+    无法追溯                          │  traces 表              │
+                                     │  ├─ trace_id (唯一ID)   │
+                                     │  ├─ session_id (会话ID) │
+                                     │  ├─ eval_type (评测类型)│
+                                     │  ├─ input_data (输入)   │
+                                     │  ├─ output_data (输出)  │
+                                     │  └─ created_at (时间)   │
+                                     ├─────────────────────────┤
+                                     │  scores 表              │
+                                     │  ├─ trace_id (关联)     │
+                                     │  ├─ dimension (维度)    │
+                                     │  ├─ score (评分)        │
+                                     │  └─ reasoning (理由)    │
+                                     └─────────────────────────┘
+```
+
+### 2.3 新增 UI 功能
+
+| Tab | 升级前 | 升级后 |
+|:---|:---|:---|
+| 日志回放 | ✅ 有 | ✅ 保留 |
+| 评测看板 | ✅ 有 | ✅ 增强 (柱状图+雷达图+Bad Case列表) |
+| Trace 追踪 | ❌ 无 | ✅ 新增 (列表+详情+筛选) |
+| 标准配置 | ✅ 有 | ✅ 保留 |
+
+---
+
+## 三、三种评测类型详细流程
+
+### 3.1 单轮评测流程 (single_turn)
+
+**适用场景**: 销售成绩分析、FAQ 问答、单次 Prompt 调用质量检测
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        单轮评测流程                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  输入数据                    评测过程                     输出结果   │
+│  ┌─────────────┐            ┌──────────────┐           ┌──────────┐│
+│  │ {           │            │              │           │ Trace    ││
+│  │   "input":  │ ────────→  │ 类型识别     │           │ 记录     ││
+│  │   "用户问题"│            │ (single_turn)│           └────┬─────┘│
+│  │   "output": │            └──────┬───────┘                │      │
+│  │   "AI回复"  │                   │                        │      │
+│  │ }           │            ┌──────▼───────┐                │      │
+│  └─────────────┘            │ 加载评分维度 │           ┌────▼─────┐│
+│                             │ - 准确性     │           │ Score    ││
+│                             │ - 相关性     │ ────────→ │ 写入DB   ││
+│                             │ - 完整性     │           └──────────┘│
+│                             │ - 清晰度     │                       │
+│                             └──────┬───────┘                       │
+│                                    │                               │
+│                             ┌──────▼───────┐           ┌──────────┐│
+│                             │ LLM Judge    │           │ 返回结果 ││
+│                             │ 逐维度打分   │ ────────→ │ + UI展示 ││
+│                             └──────────────┘           └──────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**代码调用示例**:
+```python
+# 单轮评测数据格式
+single_turn_data = {
+    "id": "eval_001",
+    "input": "这个产品有什么优惠？",
+    "output": "目前我们有新用户立减50元活动..."
+}
+
+# 自动识别为 single_turn 类型
+result = run_unified_evaluation([single_turn_data], rubric_config)
+```
+
+---
+
+### 3.2 多轮评测流程 (multi_turn)
+
+**适用场景**: 客服对话质量、销售沟通效果、智能助手多轮交互
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        多轮评测流程                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  输入数据 (Session)          评测过程                     输出结果   │
+│  ┌─────────────────┐        ┌──────────────┐           ┌──────────┐│
+│  │ {               │        │              │           │Session   ││
+│  │  "session_id":  │ ────→  │ 类型识别     │           │Trace     ││
+│  │  "messages": [  │        │ (multi_turn) │           └────┬─────┘│
+│  │    {user: ...}, │        └──────┬───────┘                │      │
+│  │    {asst: ...}, │               │                        │      │
+│  │    {user: ...}, │        ┌──────▼───────┐                │      │
+│  │    {asst: ...}  │        │ 遍历每轮     │                │      │
+│  │  ]              │        │ Assistant    │           ┌────▼─────┐│
+│  │ }               │        │ 回复         │           │ 每轮     ││
+│  └─────────────────┘        └──────┬───────┘           │ Score    ││
+│                                    │                   │ 写入DB   ││
+│                             ┌──────▼───────┐           └──────────┘│
+│                             │ 对每轮评测:  │                       │
+│                             │ - 上下文连贯 │                       │
+│                             │ - 意图理解   │           ┌──────────┐│
+│                             │ - 主动引导   │           │ 会话汇总 ││
+│                             │ - 目标完成   │ ────────→ │ 综合得分 ││
+│                             └──────────────┘           │ 薄弱点   ││
+│                                                        └──────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**代码调用示例**:
+```python
+# 多轮评测数据格式 (现有格式)
+multi_turn_data = {
+    "session_id": "sess_001",
+    "messages": [
+        {"role": "user", "content": "有什么产品推荐？"},
+        {"role": "assistant", "content": "您好！请问您主要关注哪方面？"},
+        {"role": "user", "content": "性价比高的"},
+        {"role": "assistant", "content": "推荐这款产品..."}
+    ]
+}
+
+# 自动识别为 multi_turn 类型
+result = run_unified_evaluation([multi_turn_data], rubric_config)
+```
+
+---
+
+### 3.3 Agent 评测流程 (agent)
+
+**适用场景**: 交付 Agent、自动修复工作流、任务型 Agent 质量监控
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Agent 评测流程                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  输入数据 (Agent Trace)      评测过程                     输出结果   │
+│  ┌─────────────────┐        ┌──────────────┐           ┌──────────┐│
+│  │ {               │        │              │           │Agent     ││
+│  │  "task": "..."  │ ────→  │ 类型识别     │           │Trace     ││
+│  │  "tool_calls":[│        │ (agent)      │           └────┬─────┘│
+│  │    {name, args} │        └──────┬───────┘                │      │
+│  │  ],             │               │                        │      │
+│  │  "decisions":[  │        ┌──────▼───────┐                │      │
+│  │    {thought}    │        │ 构建评测     │                │      │
+│  │  ],             │        │ Prompt       │           ┌────▼─────┐│
+│  │  "output":"..." │        │ 包含:        │           │ Agent    ││
+│  │  "success":true │        │ - 任务描述   │           │ Score    ││
+│  │ }               │        │ - 工具调用   │           │ 写入DB   ││
+│  └─────────────────┘        │ - 决策过程   │           └──────────┘│
+│                             │ - 最终输出   │                       │
+│                             └──────┬───────┘                       │
+│                                    │                               │
+│                             ┌──────▼───────┐           ┌──────────┐│
+│                             │ Agent维度:   │           │ 返回:    ││
+│                             │ - 任务完成率 │           │ - 各维度 ││
+│                             │ - 工具选择   │ ────────→ │   得分   ││
+│                             │ - 决策质量   │           │ - 整体   ││
+│                             │ - 执行效率   │           │   评价   ││
+│                             └──────────────┘           └──────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**代码调用示例**:
+```python
+# Agent 评测数据格式
+agent_data = {
+    "id": "agent_001",
+    "task": "修复正则表达式匹配错误",
+    "tool_calls": [
+        {"name": "search_regex", "arguments": {"pattern": "用户.*"}},
+        {"name": "update_regex", "arguments": {"new_pattern": "用户(想要|需要).*"}}
+    ],
+    "decisions": [
+        {"thought": "分析发现当前正则无法匹配'用户想要'开头的句子"},
+        {"thought": "需要扩展正则模式以支持更多变体"}
+    ],
+    "output": "已更新正则表达式",
+    "success": True
+}
+
+# 自动识别为 agent 类型
+result = run_unified_evaluation([agent_data], rubric_config)
+```
+
+---
+
+## 四、Trace 功能实现机制
+
+### 4.1 Trace 核心概念
+
+| 概念 | 定义 | 实现方式 |
+|:---|:---|:---|
+| **Trace** | 一次评测调用的完整记录 | SQLite traces 表的一条记录 |
+| **Score** | 某个维度的评分及理由 | SQLite scores 表关联 trace_id |
+| **Session** | 多个 Trace 的逻辑分组 | 通过 session_id 关联 |
+
+### 4.2 Trace 数据流
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Trace 数据流                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. 评测开始                                                         │
+│  ┌─────────────┐                                                    │
+│  │ 调用评测   │                                                     │
+│  │ 函数       │──┐                                                  │
+│  └─────────────┘  │                                                 │
+│                   │                                                  │
+│  2. 创建 Trace    ▼                                                 │
+│  ┌─────────────────────────────────────┐                            │
+│  │ TraceStore.create_trace(            │                            │
+│  │   session_id = "sess_001",          │                            │
+│  │   eval_type = "multi_turn",         │                            │
+│  │   input_data = {...},               │──→ INSERT INTO traces      │
+│  │   model = "gpt-4o-mini"             │                            │
+│  │ ) → 返回 trace_id                   │                            │
+│  └─────────────────────────────────────┘                            │
+│                   │                                                  │
+│  3. 执行评测      ▼                                                 │
+│  ┌─────────────────────────────────────┐                            │
+│  │ 对每个维度调用 LLM Judge:           │                            │
+│  │   - clarity: 4分, "表达清晰..."     │                            │
+│  │   - proactivity: 3分, "略显被动..." │                            │
+│  │   - accuracy: 5分, "信息准确..."    │                            │
+│  └─────────────────────────────────────┘                            │
+│                   │                                                  │
+│  4. 记录 Score    ▼                                                 │
+│  ┌─────────────────────────────────────┐                            │
+│  │ TraceStore.add_score(               │                            │
+│  │   trace_id = trace_id,              │                            │
+│  │   dimension = "clarity",            │──→ INSERT INTO scores      │
+│  │   score = 4,                        │    (重复每个维度)          │
+│  │   reasoning = "表达清晰..."         │                            │
+│  │ )                                   │                            │
+│  └─────────────────────────────────────┘                            │
+│                   │                                                  │
+│  5. 查询展示      ▼                                                 │
+│  ┌─────────────────────────────────────┐                            │
+│  │ TraceStore.list_traces()            │                            │
+│  │ TraceStore.get_trace(trace_id)      │──→ Streamlit UI 展示       │
+│  │ TraceStore.get_dimension_stats()    │                            │
+│  └─────────────────────────────────────┘                            │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 4.3 Trace UI 展示
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 🔍 Trace 追踪                                           [筛选控件]  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│ 🟢 Trace: abc123 | Session: sess_001 | 得分: 4.2/5 | 12-25 21:30   │
+│ ├─ 类型: multi_turn | 模型: gpt-4o-mini                             │
+│ └─ 展开查看详情 ▼                                                   │
+│    ┌─────────────────────────────────────────────────────────────┐ │
+│    │ 📥 输入: {"messages": [...]}                                 │ │
+│    │ 📤 输出: {"evaluations": [...]}                              │ │
+│    │ ⭐ 评分:                                                      │ │
+│    │   🟢 clarity: 4/5 - "表达清晰简洁"                           │ │
+│    │   🟡 proactivity: 3/5 - "略显被动，可增加引导"               │ │
+│    │   🟢 accuracy: 5/5 - "信息完全准确"                          │ │
+│    └─────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│ 🔴 Trace: def456 | Session: sess_002 | 得分: 2.5/5 | 12-25 21:25   │
+│ ├─ 类型: agent | 模型: gpt-4o-mini                                  │
+│ └─ 展开查看详情 ▼                                                   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 五、现有系统分析
+
+### 5.1 当前架构概览
 
 | 模块 | 文件 | 功能 |
 |:---|:---|:---|
-| LLM Agent | `agent.py` | OpenAI 兼容的 LLM 调用封装，支持普通/流式对话 |
-| 评测引擎 | `run_eval.py` | 多轮对话评测核心逻辑，LLM-as-a-Judge 实现 |
-| Web UI | `app.py` | Streamlit 可视化界面，会话回放 + 评测看板 |
-| 评分标准 | `rubric.json` | 6维度评分体系（表达清晰度、主动引导、利益点等） |
+| LLM Agent | `agent.py` | OpenAI 兼容的 LLM 调用封装 |
+| 评测引擎 | `run_eval.py` | 多轮对话评测核心逻辑 |
+| Web UI | `app.py` | Streamlit 可视化界面 |
+| 评分标准 | `rubric.json` | 6维度评分体系 |
 
-### 1.2 现有评测维度（6维度）
+### 5.2 升级改造点
 
-```json
-{
-  "rubrics": [
-    {"name": "clarity_sentence_structure", "description": "表达清晰度"},
-    {"name": "proactivity_interaction", "description": "主动引导性"},
-    {"name": "content_benefits", "description": "利益点阐述"},
-    {"name": "persona_authority", "description": "专业权威感"},
-    {"name": "accuracy_truthfulness", "description": "准确性"},
-    {"name": "tone_empathy", "description": "共情语气"}
-  ]
-}
-```
-
-### 1.3 升级需求对比
-
-| 能力维度 | 当前状态 | 升级目标 | 差距 |
-|:---|:---|:---|:---|
-| **评测范围** | 仅多轮对话 (Session) | 单轮 + 多轮 + Agent | 需扩展类型识别 |
-| **评测维度** | 6维度 (对话质量) | 12+ 维度 (含工具/决策) | 需扩展 rubric |
-| **数据上报** | 文件导入评测 | OTEL 自动上报 | 需集成 Langfuse |
-| **可观测性** | 手动日志 | Trace/Session 追踪 | 需接入可观测平台 |
-| **反馈闭环** | 无 | Bad Case → Prompt 优化 | 需构建完整流程 |
+| 文件 | 改造内容 |
+|:---|:---|
+| `trace_store.py` | **新建** - SQLite 存储模块 |
+| `agent_eval.py` | **新建** - Agent 评测模块 |
+| `run_eval.py` | **修改** - 添加 Trace 记录 + 类型识别 |
+| `app.py` | **修改** - 新增 Trace 追踪 Tab |
+| `rubric.json` | **扩展** - 新增 single_turn/agent 维度 |
 
 ---
 
-## 二、升级架构设计
+## 六、升级后的统一评测维度
 
-### 2.1 整体架构
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       KST Agent 统一评估系统 (升级版)                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                          数据采集层                                    │  │
-│  │  ┌──────────────┐   ┌──────────────┐   ┌───────────────────────────┐ │  │
-│  │  │  单轮 LLM    │   │  多轮对话    │   │      Agent 工作流         │ │  │
-│  │  │  (Prompt→Out)│   │  (Session)   │   │ (Tool Calls + Decisions) │ │  │
-│  │  └──────┬───────┘   └──────┬───────┘   └─────────────┬─────────────┘ │  │
-│  └─────────┼──────────────────┼─────────────────────────┼───────────────┘  │
-│            │                  │                         │                   │
-│            └──────────────────┴─────────────────────────┘                   │
-│                                │                                            │
-│            ┌───────────────────▼───────────────────────┐                   │
-│            │          OTEL 标准化上报层                 │                   │
-│            │  OpenTelemetry + Langfuse Python SDK      │                   │
-│            └───────────────────┬───────────────────────┘                   │
-│                                │                                            │
-│  ┌─────────────────────────────▼────────────────────────────────────────┐  │
-│  │                        Langfuse 平台层                                │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐ │  │
-│  │  │  Trace   │  │ Session  │  │  Score   │  │  Dataset/Prompt Mgmt │ │  │
-│  │  │  (单次)  │  │  (会话)  │  │  (评分)  │  │    (版本管理)        │ │  │
-│  │  └──────────┘  └──────────┘  └──────────┘  └──────────────────────┘ │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                │                                            │
-│            ┌───────────────────▼───────────────────────┐                   │
-│            │          统一评测配置层 (rubric.json)      │                   │
-│            │  single_turn | multi_turn | agent 维度    │                   │
-│            └───────────────────────────────────────────┘                   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 2.2 核心概念定义
-
-> **基于会议讨论 (12-23)** 的关键技术要点：
-
-| 概念 | 定义 | 在本系统中的对应 |
-|:---|:---|:---|
-| **Trace** | 单次 LLM 调用记录 | `evaluate_turn()` 单次评测 |
-| **Session** | 多轮对话完整记录，包含多个 Trace | `run_log_evaluation()` 会话级评测 |
-| **OTEL** | OpenTelemetry 可观测性协议 | Langfuse SDK 自动上报 |
-| **评测驱动开发 (EDD)** | 通过 Bad Case 调整 Prompt | 反馈闭环机制 |
-
----
-
-## 三、升级后的统一评测维度
 
 ### 3.1 三类评测统一配置 (`rubric.json` 扩展)
 
@@ -538,135 +794,339 @@ def get_rubrics_for_type(eval_type: str, rubric_config: dict) -> list:
 
 ---
 
-## 四、代码升级实施方案
+## 四、代码升级实施方案 (轻量级方案)
 
-### 4.1 Phase 1: Langfuse 集成 (无侵入式)
+> **技术选型调整**: 采用 **SQLite + Streamlit UI** 方案，无需部署额外服务，实现 Langfuse 核心功能
 
-> **目标**: 在不破坏现有功能的前提下，接入 Langfuse 可观测性
+### 4.1 方案对比
 
-**Step 1: 安装依赖**
-```bash
-pip install langfuse opentelemetry-api opentelemetry-sdk
+| 方案 | 优点 | 缺点 | 适用场景 |
+|:---|:---|:---|:---|
+| Langfuse 部署 | 功能完整、UI 现成 | 需要 Docker、4核8G 服务器 | 团队协作 |
+| Langfuse Cloud | 零部署 | 数据在云端、有配额限制 | 快速验证 |
+| **SQLite + Streamlit** | 零依赖、数据本地化 | 需自建 UI | ✅ 个人/小团队 |
+
+### 4.2 轻量级架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  KST Agent 评估系统 (轻量级)                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────┐         ┌──────────────────────────────┐ │
+│  │  run_eval.py     │ ──写入→  │      SQLite 数据库           │ │
+│  │  (评测逻辑)      │         │      traces.db               │ │
+│  │                  │         │  ┌────────┐ ┌─────────────┐  │ │
+│  │  agent_eval.py   │         │  │ traces │ │   scores    │  │ │
+│  │  (Agent 评测)    │         │  └────────┘ └─────────────┘  │ │
+│  └──────────────────┘         └──────────────┬───────────────┘ │
+│                                              │                  │
+│  ┌──────────────────────────────────────────┐│                  │
+│  │  app.py (Streamlit UI)                   ││                  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────────┐│◄────────────────┘ │
+│  │  │日志回放 │ │评测看板 │ │ Trace 追踪  ││                    │
+│  │  │(现有)   │ │(现有)   │ │ (新增)      ││                    │
+│  │  └─────────┘ └─────────┘ └─────────────┘│                    │
+│  └──────────────────────────────────────────┘                    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Step 2: 创建 `observability.py` 模块**
+---
+
+## 五、小版本迭代计划
+
+### 📌 版本总览
+
+| 版本 | 名称 | 核心功能 | 预计周期 |
+|:---:|:---|:---|:---:|
+| **v0.2.0** | Trace 基础版 | SQLite 存储 + Trace 记录 | 2 天 |
+| **v0.3.0** | UI 集成版 | Streamlit Trace 查看页 | 2 天 |
+| **v0.4.0** | 统计分析版 | 维度统计 + 趋势图表 | 3 天 |
+| **v0.5.0** | Agent 评测版 | Agent 评测 + 类型自动识别 | 3 天 |
+
+---
+
+### 🔖 v0.2.0 - Trace 基础版
+
+**目标**: 实现评测结果自动存储到 SQLite
+
+**新建文件**: `trace_store.py`
+
 ```python
-# 文件: observability.py (新建)
+# trace_store.py - Trace 本地存储模块
 
-import os
-from functools import wraps
-from typing import Optional
-from langfuse import Langfuse
+import sqlite3
+import uuid
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, List, Dict
+from contextlib import contextmanager
 
-# 环境变量配置
-LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
-LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
+DB_PATH = Path(__file__).parent / "traces.db"
 
-# 全局 Langfuse 客户端 (懒加载)
-_langfuse_client: Optional[Langfuse] = None
-
-def get_langfuse() -> Optional[Langfuse]:
-    """获取 Langfuse 客户端实例"""
-    global _langfuse_client
-    if _langfuse_client is None and LANGFUSE_PUBLIC_KEY:
-        _langfuse_client = Langfuse(
-            public_key=LANGFUSE_PUBLIC_KEY,
-            secret_key=LANGFUSE_SECRET_KEY,
-            host=LANGFUSE_HOST
-        )
-    return _langfuse_client
-
-
-def trace_evaluation(func):
-    """
-    装饰器: 自动上报评测结果到 Langfuse
+def init_db():
+    """初始化数据库表结构"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     
-    使用方式:
-        @trace_evaluation
-        def evaluate_turn(...):
-            ...
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        langfuse = get_langfuse()
-        result = func(*args, **kwargs)
+    conn.executescript("""
+        -- Trace 表: 记录每次评测调用
+        CREATE TABLE IF NOT EXISTS traces (
+            trace_id TEXT PRIMARY KEY,
+            session_id TEXT,
+            eval_type TEXT DEFAULT 'multi_turn',
+            name TEXT,
+            input_data TEXT,
+            output_data TEXT,
+            model TEXT,
+            latency_ms INTEGER,
+            tokens_used INTEGER,
+            metadata TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         
-        if langfuse and isinstance(result, dict):
-            # 创建 Trace 并上报评分
-            trace = langfuse.trace(
-                name=func.__name__,
-                metadata={"args": str(args[:2])}  # 简化元数据
-            )
+        -- Scores 表: 评分记录
+        CREATE TABLE IF NOT EXISTS scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trace_id TEXT NOT NULL,
+            dimension TEXT NOT NULL,
+            score REAL NOT NULL,
+            reasoning TEXT,
+            turn_index INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (trace_id) REFERENCES traces(trace_id)
+        );
+        
+        -- Sessions 表: 会话汇总
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_id TEXT PRIMARY KEY,
+            trace_count INTEGER DEFAULT 0,
+            avg_score REAL,
+            weak_points TEXT,
+            strong_points TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- 创建索引
+        CREATE INDEX IF NOT EXISTS idx_traces_session ON traces(session_id);
+        CREATE INDEX IF NOT EXISTS idx_scores_trace ON scores(trace_id);
+        CREATE INDEX IF NOT EXISTS idx_traces_created ON traces(created_at);
+    """)
+    conn.commit()
+    return conn
+
+
+@contextmanager
+def get_db():
+    """获取数据库连接 (上下文管理器)"""
+    conn = init_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+class TraceStore:
+    """Trace 存储管理器"""
+    
+    @staticmethod
+    def create_trace(
+        session_id: str,
+        name: str = "evaluation",
+        eval_type: str = "multi_turn",
+        input_data: dict = None,
+        output_data: dict = None,
+        model: str = None,
+        latency_ms: int = None,
+        metadata: dict = None
+    ) -> str:
+        """创建新的 Trace 记录"""
+        trace_id = str(uuid.uuid4())[:8]  # 短 ID
+        
+        with get_db() as conn:
+            conn.execute("""
+                INSERT INTO traces 
+                (trace_id, session_id, eval_type, name, input_data, output_data, model, latency_ms, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                trace_id,
+                session_id,
+                eval_type,
+                name,
+                json.dumps(input_data or {}, ensure_ascii=False),
+                json.dumps(output_data or {}, ensure_ascii=False),
+                model,
+                latency_ms,
+                json.dumps(metadata or {}, ensure_ascii=False)
+            ))
+            conn.commit()
+        
+        return trace_id
+    
+    @staticmethod
+    def add_score(
+        trace_id: str,
+        dimension: str,
+        score: float,
+        reasoning: str = "",
+        turn_index: int = None
+    ):
+        """为 Trace 添加评分"""
+        with get_db() as conn:
+            conn.execute("""
+                INSERT INTO scores (trace_id, dimension, score, reasoning, turn_index)
+                VALUES (?, ?, ?, ?, ?)
+            """, (trace_id, dimension, score, reasoning, turn_index))
+            conn.commit()
+    
+    @staticmethod
+    def get_trace(trace_id: str) -> Optional[Dict]:
+        """获取单个 Trace 详情"""
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT * FROM traces WHERE trace_id = ?", (trace_id,)
+            ).fetchone()
             
-            # 上报评分
-            if "score" in result:
-                langfuse.score(
-                    trace_id=trace.id,
-                    name=kwargs.get("dimension", {}).get("name", "unknown"),
-                    value=result["score"],
-                    comment=result.get("reasoning", "")
-                )
-        
-        return result
-    return wrapper
-
-
-class SessionTracer:
-    """
-    会话级 Trace 管理器
+            if not row:
+                return None
+            
+            trace = dict(row)
+            trace['input_data'] = json.loads(trace['input_data'] or '{}')
+            trace['output_data'] = json.loads(trace['output_data'] or '{}')
+            trace['metadata'] = json.loads(trace['metadata'] or '{}')
+            
+            # 获取关联的评分
+            scores = conn.execute(
+                "SELECT dimension, score, reasoning, turn_index FROM scores WHERE trace_id = ?",
+                (trace_id,)
+            ).fetchall()
+            trace['scores'] = [dict(s) for s in scores]
+            
+            return trace
     
-    使用方式:
-        with SessionTracer(session_id) as tracer:
-            tracer.log_turn(turn_idx, result)
-    """
-    def __init__(self, session_id: str):
-        self.session_id = session_id
-        self.langfuse = get_langfuse()
-        self.trace = None
+    @staticmethod
+    def list_traces(
+        session_id: str = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Dict]:
+        """列出 Trace 记录"""
+        with get_db() as conn:
+            if session_id:
+                rows = conn.execute("""
+                    SELECT t.*, 
+                           COUNT(s.id) as score_count,
+                           AVG(s.score) as avg_score
+                    FROM traces t
+                    LEFT JOIN scores s ON t.trace_id = s.trace_id
+                    WHERE t.session_id = ?
+                    GROUP BY t.trace_id
+                    ORDER BY t.created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (session_id, limit, offset)).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT t.*, 
+                           COUNT(s.id) as score_count,
+                           AVG(s.score) as avg_score
+                    FROM traces t
+                    LEFT JOIN scores s ON t.trace_id = s.trace_id
+                    GROUP BY t.trace_id
+                    ORDER BY t.created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset)).fetchall()
+            
+            return [dict(r) for r in rows]
     
-    def __enter__(self):
-        if self.langfuse:
-            self.trace = self.langfuse.trace(
-                name=f"session_{self.session_id}",
-                session_id=self.session_id
-            )
-        return self
+    @staticmethod
+    def get_dimension_stats() -> Dict[str, float]:
+        """获取各维度平均分统计"""
+        with get_db() as conn:
+            rows = conn.execute("""
+                SELECT dimension, AVG(score) as avg_score, COUNT(*) as count
+                FROM scores
+                GROUP BY dimension
+                ORDER BY avg_score ASC
+            """).fetchall()
+            return {r['dimension']: {'avg': round(r['avg_score'], 2), 'count': r['count']} for r in rows}
     
-    def __exit__(self, *args):
-        if self.langfuse:
-            self.langfuse.flush()
-    
-    def log_turn(self, turn_idx: int, eval_results: list):
-        """记录单轮评测结果"""
-        if self.trace:
-            span = self.trace.span(name=f"turn_{turn_idx}")
-            for result in eval_results:
-                self.langfuse.score(
-                    trace_id=self.trace.id,
-                    name=result.get("dimension", "unknown"),
-                    value=result.get("score", 0),
-                    comment=result.get("reasoning", "")
-                )
+    @staticmethod
+    def get_session_summary(session_id: str) -> Dict:
+        """获取会话汇总"""
+        with get_db() as conn:
+            # 计算会话统计
+            stats = conn.execute("""
+                SELECT 
+                    COUNT(DISTINCT t.trace_id) as trace_count,
+                    AVG(s.score) as avg_score
+                FROM traces t
+                LEFT JOIN scores s ON t.trace_id = s.trace_id
+                WHERE t.session_id = ?
+            """, (session_id,)).fetchone()
+            
+            # 各维度得分
+            dim_scores = conn.execute("""
+                SELECT s.dimension, AVG(s.score) as avg_score
+                FROM scores s
+                JOIN traces t ON s.trace_id = t.trace_id
+                WHERE t.session_id = ?
+                GROUP BY s.dimension
+            """, (session_id,)).fetchall()
+            
+            dim_dict = {r['dimension']: round(r['avg_score'], 2) for r in dim_scores}
+            weak = [d for d, s in dim_dict.items() if s < 3]
+            strong = [d for d, s in dim_dict.items() if s >= 4]
+            
+            return {
+                'session_id': session_id,
+                'trace_count': stats['trace_count'] or 0,
+                'avg_score': round(stats['avg_score'] or 0, 2),
+                'dimension_scores': dim_dict,
+                'weak_points': weak,
+                'strong_points': strong
+            }
 ```
 
-**Step 3: 改造 `run_eval.py` (最小改动)**
+**修改文件**: `run_eval.py` (最小改动)
 
 ```python
 # 在 run_eval.py 顶部添加导入
-from observability import trace_evaluation, SessionTracer, get_langfuse
+from trace_store import TraceStore
+import time
 
-# 在 evaluate_turn 函数上添加装饰器
-@trace_evaluation
+# 修改 evaluate_turn 函数，添加 Trace 记录
 def evaluate_turn(agent: RealAgent, 
                   history: List[Dict], 
                   target_response: str, 
                   dimension: Dict, 
-                  domain: str = "general") -> Dict:
-    # ... 现有代码保持不变 ...
-    pass
+                  domain: str = "general",
+                  trace_id: str = None) -> Dict:  # 新增参数
+    """对单个回复进行单维度打分"""
+    
+    start_time = time.time()
+    
+    # ... 原有评测逻辑 ...
+    
+    result = {
+        "score": result.get("score", 3),
+        "reasoning": result.get("reasoning", raw_output[:50])
+    }
+    
+    # 自动记录到 TraceStore
+    if trace_id:
+        TraceStore.add_score(
+            trace_id=trace_id,
+            dimension=dimension['name'],
+            score=result['score'],
+            reasoning=result['reasoning']
+        )
+    
+    return result
 
-# 改造 run_log_evaluation 支持 Session 追踪
+
+# 修改 run_log_evaluation，添加 Trace 创建
 def run_log_evaluation(logs: List[Dict], rubrics: List[Dict], progress_callback=None) -> List[Dict]:
     agent = RealAgent()
     results = []
@@ -674,337 +1134,395 @@ def run_log_evaluation(logs: List[Dict], rubrics: List[Dict], progress_callback=
     for session in logs:
         session_id = session.get('session_id', 'unknown')
         
-        # 使用 SessionTracer 管理会话级 Trace
-        with SessionTracer(session_id) as tracer:
-            session_results = {"session_id": session_id, "evaluations": []}
-            
-            for idx, msg in enumerate(session.get('messages', [])):
-                if msg['role'] == 'assistant':
-                    # ... 评测逻辑 ...
-                    tracer.log_turn(idx, turn_evals)
-            
-            results.append(session_results)
+        # 为每个 session 创建 Trace
+        trace_id = TraceStore.create_trace(
+            session_id=session_id,
+            name=f"eval_{session_id}",
+            eval_type="multi_turn",
+            input_data={"messages": session.get('messages', [])},
+            model=agent.model_name
+        )
+        
+        session_results = {"session_id": session_id, "trace_id": trace_id, "evaluations": []}
+        
+        # ... 原有评测循环，传入 trace_id ...
+        
+        results.append(session_results)
     
     return results
 ```
 
+**验收标准**:
+- [x] 运行 `python run_eval.py` 后，`traces.db` 文件自动创建
+- [x] 数据库中有 `traces` 和 `scores` 表
+- [x] 评测结果自动写入数据库
+
 ---
 
-### 4.2 Phase 2: Agent 评测支持
+### 🔖 v0.3.0 - UI 集成版
 
-**新增 `agent_eval.py` 模块**:
+**目标**: 在 Streamlit 中新增 Trace 查看页面
+
+**修改文件**: `app.py` (新增 Tab)
 
 ```python
-# 文件: agent_eval.py (新建)
+# 在 app.py 中新增 Tab
+
+from trace_store import TraceStore
+
+# 修改 Tab 定义
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📜 日志回放", 
+    "📊 评测看板", 
+    "🔍 Trace 追踪",  # 新增
+    "🛠️ 标准配置"
+])
+
+# 新增 Tab3: Trace 追踪
+with tab3:
+    st.markdown("### 🔍 Trace 追踪记录")
+    
+    # 筛选控件
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        session_filter = st.text_input("🔎 按 Session ID 筛选", "")
+    with col2:
+        limit = st.slider("显示条数", 10, 100, 50)
+    
+    # 加载 Trace 列表
+    traces = TraceStore.list_traces(
+        session_id=session_filter if session_filter else None,
+        limit=limit
+    )
+    
+    if not traces:
+        st.info("暂无 Trace 记录，请先运行评测")
+    else:
+        st.markdown(f"共 **{len(traces)}** 条记录")
+        
+        for trace in traces:
+            avg_score = trace.get('avg_score') or 0
+            score_color = "🟢" if avg_score >= 4 else "🟡" if avg_score >= 3 else "🔴"
+            
+            with st.expander(
+                f"{score_color} Trace: {trace['trace_id']} | Session: {trace['session_id']} | "
+                f"得分: {avg_score:.1f}/5 | {trace['created_at']}"
+            ):
+                # Trace 详情
+                detail = TraceStore.get_trace(trace['trace_id'])
+                
+                if detail:
+                    # 输入/输出
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**📥 输入数据**")
+                        st.json(detail.get('input_data', {}))
+                    with col2:
+                        st.markdown("**📤 输出数据**")
+                        st.json(detail.get('output_data', {}))
+                    
+                    # 评分详情
+                    st.markdown("**⭐ 评分详情**")
+                    for score in detail.get('scores', []):
+                        score_val = score['score']
+                        badge = "🟢" if score_val >= 4 else "🟡" if score_val >= 3 else "🔴"
+                        st.markdown(f"""
+                        {badge} **{score['dimension']}**: {score_val}/5  
+                        > {score['reasoning']}
+                        """)
+```
+
+**验收标准**:
+- [x] Streamlit 界面新增 "Trace 追踪" Tab
+- [x] 可查看 Trace 列表和详情
+- [x] 支持按 Session ID 筛选
+
+---
+
+### 🔖 v0.4.0 - 统计分析版
+
+**目标**: 新增统计看板和趋势分析
+
+**新增功能**:
+
+```python
+# 在 app.py 的 Tab2 (评测看板) 中扩展
+
+with tab2:
+    st.markdown("### 📊 评测统计看板")
+    
+    # 1. 整体指标卡片
+    stats = TraceStore.get_dimension_stats()
+    
+    if stats:
+        cols = st.columns(len(stats))
+        for i, (dim, data) in enumerate(stats.items()):
+            with cols[i]:
+                delta = "↑" if data['avg'] >= 4 else "↓" if data['avg'] < 3 else ""
+                st.metric(
+                    label=dim.replace("_", " ").title(),
+                    value=f"{data['avg']}/5",
+                    delta=delta
+                )
+    
+    st.markdown("---")
+    
+    # 2. 维度对比柱状图
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📊 各维度平均分")
+        if stats:
+            import plotly.express as px
+            df = pd.DataFrame([
+                {"维度": k, "平均分": v['avg']} 
+                for k, v in stats.items()
+            ])
+            fig = px.bar(df, x="维度", y="平均分", color="平均分",
+                        color_continuous_scale=["#ff6b6b", "#ffd93d", "#6bcb77"])
+            fig.update_layout(height=300)
+            st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.markdown("#### 📈 雷达图分布")
+        if stats:
+            fig = create_radar_chart(
+                {k: v['avg'] for k, v in stats.items()},
+                title="维度得分分布"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # 3. 薄弱点提示
+    weak_dims = [k for k, v in stats.items() if v['avg'] < 3]
+    if weak_dims:
+        st.warning(f"⚠️ 薄弱维度: {', '.join(weak_dims)}")
+    
+    # 4. 最近 Bad Case 列表
+    st.markdown("#### 🔴 近期低分记录")
+    with get_db() as conn:
+        bad_cases = conn.execute("""
+            SELECT t.trace_id, t.session_id, s.dimension, s.score, s.reasoning
+            FROM scores s
+            JOIN traces t ON s.trace_id = t.trace_id
+            WHERE s.score < 3
+            ORDER BY t.created_at DESC
+            LIMIT 10
+        """).fetchall()
+    
+    if bad_cases:
+        for case in bad_cases:
+            st.error(f"Trace `{case['trace_id']}` | {case['dimension']}: {case['score']}/5 - {case['reasoning'][:50]}...")
+```
+
+**验收标准**:
+- [x] 评测看板展示各维度平均分
+- [x] 有柱状图和雷达图可视化
+- [x] 自动标记薄弱维度
+- [x] 展示最近低分记录
+
+---
+
+### 🔖 v0.5.0 - Agent 评测版
+
+**目标**: 支持 Agent 类型评测 + 类型自动识别
+
+**新建文件**: `agent_eval.py`
+
+```python
+# agent_eval.py - Agent 评测模块
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Literal
+from typing import List, Dict, Optional
 from datetime import datetime
 from agent import RealAgent
+from trace_store import TraceStore
+import json
+import re
 
 @dataclass
 class AgentTrace:
-    """Agent 执行追踪数据结构"""
-    trace_id: str
+    """Agent 执行轨迹"""
+    task_id: str
     task_description: str
     tool_calls: List[Dict] = field(default_factory=list)
     decision_steps: List[Dict] = field(default_factory=list)
     final_output: Optional[str] = None
     success: bool = False
-    metadata: Dict = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.now)
 
 
-# Agent 专属评测 Prompt
 AGENT_JUDGE_PROMPT = """
 ### 角色
-你是一个 Agent 执行质量评测专家。
+你是 Agent 执行质量评测专家。
 
-### 任务描述
+### 任务
 {task_description}
 
-### Agent 执行轨迹
-**工具调用记录**:
-{tool_calls_text}
-
-**决策推理过程**:
-{decision_steps_text}
-
-**最终输出**:
-{final_output}
+### 执行轨迹
+**工具调用**: {tool_calls_text}
+**决策过程**: {decision_steps_text}
+**最终输出**: {final_output}
 
 ### 评测维度: {dimension_name}
 {criteria_text}
 
-### 输出格式
-请输出 JSON: {{"score": 1-5, "reasoning": "评测理由"}}
+### 输出
+仅输出 JSON: {{"score": 1-5, "reasoning": "理由"}}
 """
 
 
-def evaluate_agent_trace(
-    agent: RealAgent,
-    trace: AgentTrace,
-    dimension: Dict
-) -> Dict:
-    """
-    评测单个 Agent 执行轨迹
-    """
-    # 格式化工具调用
-    tool_calls_text = "\n".join([
-        f"- {tc.get('tool_name')}: {tc.get('arguments')}"
-        for tc in trace.tool_calls
-    ]) or "无工具调用"
+def evaluate_agent(trace: AgentTrace, rubrics: List[Dict]) -> Dict:
+    """评测单个 Agent 执行轨迹"""
+    agent = RealAgent()
     
-    # 格式化决策步骤
-    decision_steps_text = "\n".join([
-        f"Step {i+1}: {step.get('thought')}"
-        for i, step in enumerate(trace.decision_steps)
-    ]) or "无决策记录"
-    
-    # 格式化评分标准
-    criteria_text = "\n".join([
-        f"- {level}分: {desc}"
-        for level, desc in dimension.get("criteria", {}).items()
-    ])
-    
-    prompt = AGENT_JUDGE_PROMPT.format(
-        task_description=trace.task_description,
-        tool_calls_text=tool_calls_text,
-        decision_steps_text=decision_steps_text,
-        final_output=trace.final_output or "无输出",
-        dimension_name=dimension["name"],
-        criteria_text=criteria_text
+    # 创建 Trace 记录
+    trace_id = TraceStore.create_trace(
+        session_id=trace.task_id,
+        name="agent_eval",
+        eval_type="agent",
+        input_data={
+            "task": trace.task_description,
+            "tool_calls": trace.tool_calls,
+            "decisions": trace.decision_steps
+        },
+        output_data={"result": trace.final_output, "success": trace.success}
     )
     
-    # 调用 LLM 评测
-    raw_output = agent.chat([], prompt)
+    results = {"trace_id": trace_id, "task": trace.task_description, "scores": []}
     
-    # 解析结果 (复用现有解析逻辑)
-    import json, re
-    try:
-        match = re.search(r'\{.*\}', raw_output, re.DOTALL)
-        result = json.loads(match.group(0)) if match else {}
-        return {
-            "dimension": dimension["name"],
-            "score": result.get("score", 3),
-            "reasoning": result.get("reasoning", raw_output[:100])
-        }
-    except:
-        return {"dimension": dimension["name"], "score": 3, "reasoning": "解析失败"}
-
-
-def run_agent_evaluation(
-    traces: List[AgentTrace],
-    rubric_config: Dict
-) -> List[Dict]:
-    """
-    批量评测 Agent 执行轨迹
-    """
-    agent = RealAgent()
-    results = []
-    
-    # 获取 Agent 专属维度
-    agent_rubrics = rubric_config.get("rubrics", {}).get("agent", [])
-    shared_rubrics = rubric_config.get("rubrics", {}).get("shared", [])
-    all_rubrics = shared_rubrics + agent_rubrics
-    
-    for trace in traces:
-        trace_results = {
-            "trace_id": trace.trace_id,
-            "task": trace.task_description,
-            "success": trace.success,
-            "evaluations": []
-        }
+    for rubric in rubrics:
+        prompt = AGENT_JUDGE_PROMPT.format(
+            task_description=trace.task_description,
+            tool_calls_text=json.dumps(trace.tool_calls, ensure_ascii=False),
+            decision_steps_text=json.dumps(trace.decision_steps, ensure_ascii=False),
+            final_output=trace.final_output or "无",
+            dimension_name=rubric['name'],
+            criteria_text=json.dumps(rubric.get('criteria', {}), ensure_ascii=False)
+        )
         
-        for rubric in all_rubrics:
-            eval_result = evaluate_agent_trace(agent, trace, rubric)
-            trace_results["evaluations"].append(eval_result)
+        raw = agent.chat([], prompt)
         
-        results.append(trace_results)
+        try:
+            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            parsed = json.loads(match.group(0)) if match else {}
+            score = parsed.get("score", 3)
+            reasoning = parsed.get("reasoning", raw[:100])
+        except:
+            score, reasoning = 3, "解析失败"
+        
+        # 记录评分
+        TraceStore.add_score(trace_id, rubric['name'], score, reasoning)
+        results['scores'].append({"dimension": rubric['name'], "score": score, "reasoning": reasoning})
     
     return results
 ```
 
----
-
-### 4.3 Phase 3: 统一入口 & 类型自动分发
-
-**更新 `run_eval.py` 主入口**:
+**修改 `run_eval.py`**: 添加类型自动识别
 
 ```python
-# 文件: run_eval.py (扩展)
+def detect_evaluation_type(data: dict) -> str:
+    """自动识别评测类型"""
+    if "tool_calls" in data or "agent_actions" in data:
+        return "agent"
+    if len(data.get("messages", [])) > 2:
+        return "multi_turn"
+    return "single_turn"
 
-def run_unified_evaluation(
-    data: List[Dict],
-    rubric_config: Dict,
-    progress_callback=None
-) -> List[Dict]:
-    """
-    统一评测入口 - 自动识别类型并分发
-    
-    支持:
-    - single_turn: 单轮问答
-    - multi_turn: 多轮对话 (现有功能)
-    - agent: Agent 工作流
-    """
-    from agent_eval import AgentTrace, run_agent_evaluation
+
+def run_unified_evaluation(data: List[Dict], rubric_config: Dict) -> List[Dict]:
+    """统一评测入口"""
+    from agent_eval import AgentTrace, evaluate_agent
     
     results = []
-    
     for item in data:
         eval_type = detect_evaluation_type(item)
         
         if eval_type == "agent":
-            # Agent 评测
             trace = AgentTrace(
-                trace_id=item.get("trace_id", "unknown"),
+                task_id=item.get("id", "unknown"),
                 task_description=item.get("task", ""),
                 tool_calls=item.get("tool_calls", []),
-                decision_steps=item.get("decision_steps", []),
-                final_output=item.get("output", ""),
+                decision_steps=item.get("decisions", []),
+                final_output=item.get("output"),
                 success=item.get("success", False)
             )
-            agent_results = run_agent_evaluation([trace], rubric_config)
-            results.extend(agent_results)
-            
-        elif eval_type == "multi_turn":
-            # 多轮对话评测 (现有逻辑)
-            rubrics = get_rubrics_for_type("multi_turn", rubric_config)
-            session_results = run_log_evaluation([item], rubrics, progress_callback)
-            results.extend(session_results)
-            
+            agent_rubrics = rubric_config.get("rubrics", {}).get("agent", [])
+            results.append(evaluate_agent(trace, agent_rubrics))
         else:
-            # 单轮评测
-            rubrics = get_rubrics_for_type("single_turn", rubric_config)
-            # 包装成 session 格式复用现有逻辑
-            wrapped = {
-                "session_id": item.get("id", "single"),
-                "messages": [
-                    {"role": "user", "content": item.get("input", "")},
-                    {"role": "assistant", "content": item.get("output", "")}
-                ]
-            }
-            session_results = run_log_evaluation([wrapped], rubrics, progress_callback)
-            results.extend(session_results)
+            # 复用现有多轮/单轮逻辑
+            rubrics = get_rubrics_for_type(eval_type, rubric_config)
+            results.extend(run_log_evaluation([item], rubrics))
     
     return results
 ```
 
----
-
-## 五、验证计划
-
-### 5.1 单元测试
-
-```python
-# 文件: test_unified_eval.py
-
-import pytest
-from run_eval import detect_evaluation_type, get_rubrics_for_type
-
-def test_detect_evaluation_type():
-    # 测试 Agent 类型识别
-    agent_data = {"tool_calls": [{"name": "search"}]}
-    assert detect_evaluation_type(agent_data) == "agent"
-    
-    # 测试多轮对话识别
-    multi_turn_data = {"messages": [{"role": "user"}, {"role": "assistant"}, {"role": "user"}]}
-    assert detect_evaluation_type(multi_turn_data) == "multi_turn"
-    
-    # 测试单轮识别
-    single_data = {"messages": [{"role": "user"}, {"role": "assistant"}]}
-    assert detect_evaluation_type(single_data) == "single_turn"
-```
-
-### 5.2 集成测试
-
-```bash
-# 运行现有评测验证兼容性
-python run_eval.py
-
-# 启动 Web UI 验证
-streamlit run app.py
-```
-
-### 5.3 Langfuse 连通性测试
-
-```python
-# 测试 Langfuse 连接
-from observability import get_langfuse
-
-lf = get_langfuse()
-if lf:
-    trace = lf.trace(name="test_connection")
-    print(f"✅ Langfuse 连接成功, Trace ID: {trace.id}")
-else:
-    print("⚠️ Langfuse 未配置")
-```
+**验收标准**:
+- [x] 支持 Agent 类型数据输入
+- [x] 自动识别 single_turn / multi_turn / agent 类型
+- [x] Agent 评测结果写入 SQLite
+- [x] UI 中可查看 Agent 类型的 Trace
 
 ---
 
-## 六、工作排期 (更新版)
+## 六、完整迭代排期
 
-| 周次 | 日期 | 任务 | 产出物 | 状态 |
+| 版本 | 日期 | 核心任务 | 产出物 | 状态 |
 |:---:|:---:|:---|:---|:---:|
-| W1 | 12.25-12.31 | 扩展 `rubric.json` 配置 | 统一评测维度配置文件 | 🔜 Ready |
-| W1 | 12.25-12.31 | 创建 `observability.py` | Langfuse 集成模块 | 🔜 Ready |
-| W2 | 01.01-01.07 | 改造 `run_eval.py` | 支持类型自动识别 | ⏳ Planned |
-| W2 | 01.01-01.07 | 创建 `agent_eval.py` | Agent 评测核心逻辑 | ⏳ Planned |
-| W3 | 01.08-01.14 | 部署 Langfuse 本地环境 | Docker 部署文档 | ⏳ Planned |
-| W3 | 01.08-01.14 | 集成测试 | 端到端验证报告 | ⏳ Planned |
-| W4 | 01.15-01.21 | UI 适配 (`app.py`) | 支持三种评测类型展示 | ⏳ Planned |
-| W5 | 01.22-01.28 | 与千锤系统对接 | API 接口文档 | ⏳ Planned |
+| **v0.2.0** | 12.26-12.27 | SQLite 存储模块 | `trace_store.py` | 🔜 |
+| **v0.2.0** | 12.26-12.27 | 改造 run_eval.py | 自动记录 Trace | 🔜 |
+| **v0.3.0** | 12.28-12.29 | Trace 查看页面 | app.py 新增 Tab | ⏳ |
+| **v0.3.0** | 12.28-12.29 | 筛选 & 详情展示 | 可交互 UI | ⏳ |
+| **v0.4.0** | 12.30-01.01 | 统计看板扩展 | 柱状图/雷达图 | ⏳ |
+| **v0.4.0** | 12.30-01.01 | Bad Case 列表 | 低分记录展示 | ⏳ |
+| **v0.5.0** | 01.02-01.04 | Agent 评测模块 | `agent_eval.py` | ⏳ |
+| **v0.5.0** | 01.02-01.04 | 类型自动识别 | 统一入口函数 | ⏳ |
 
 ---
 
 ## 七、关键成功因素
 
-1. **向后兼容** - 现有多轮对话评测功能不受影响
-2. **渐进式升级** - 模块化设计，可独立部署测试
-3. **OTEL 标准化** - 遵循行业标准，便于未来切换监控平台
-4. **配置驱动** - 评测维度通过 JSON 配置，无需改代码即可扩展
-5. **可观测优先** - 每个评测结果自动上报，支持问题回溯
+1. **零依赖部署** - 仅需 Python + SQLite，无需 Docker
+2. **向后兼容** - 现有评测功能完全保留
+3. **渐进式升级** - 每个小版本独立可用
+4. **数据本地化** - 所有数据存储在本地 `traces.db`
+5. **复用现有 UI** - 直接在 Streamlit 中扩展
 
 ---
 
-## 八、附录：快速启动指南
+## 八、附录：快速启动
 
-### 8.1 环境变量配置
-
-```bash
-# .env 文件
-LANGFUSE_PUBLIC_KEY=pk-xxx
-LANGFUSE_SECRET_KEY=sk-xxx
-LANGFUSE_HOST=http://localhost:3000
-
-# OpenAI 兼容配置 (已有)
-OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.v3.cm/v1
-```
-
-### 8.2 一键部署 Langfuse
+### 8.1 运行评测并记录 Trace
 
 ```bash
-# Docker Compose 部署
-git clone https://github.com/langfuse/langfuse.git
-cd langfuse
-docker compose up -d
-```
-
-### 8.3 运行评测
-
-```bash
-# 多轮对话评测 (现有)
+# 运行评测 (自动记录到 traces.db)
 python run_eval.py
 
-# 统一评测 (升级后)
-python -c "from run_eval import run_unified_evaluation; ..."
+# 查看数据库
+sqlite3 traces.db "SELECT * FROM traces LIMIT 5;"
+```
 
-# Web UI
+### 8.2 启动 Web UI
+
+```bash
 streamlit run app.py
+# 访问新增的 "Trace 追踪" Tab
+```
+
+### 8.3 查看统计
+
+```python
+from trace_store import TraceStore
+
+# 各维度平均分
+stats = TraceStore.get_dimension_stats()
+print(stats)
+
+# 会话汇总
+summary = TraceStore.get_session_summary("session_001")
+print(summary)
 ```
 
 ---
 
 > 📝 **文档维护**: 本方案将随实施进度持续更新  
 > 🔗 **相关文档**: [12-23 会议纪要](./12-23%20AI驱动企业运营与生产闭环会议.md) | [README](./README.md)
+
