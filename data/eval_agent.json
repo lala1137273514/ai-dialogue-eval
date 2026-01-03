@@ -1,0 +1,390 @@
+[
+    {
+        "session_id": "agent_search_success_001",
+        "eval_type": "agent",
+        "task": "查询北京今天的天气并给出穿衣建议",
+        "task_description": "用户询问北京今天的天气情况，Agent需要调用天气API获取数据并给出合理的穿衣建议",
+        "tool_calls": [
+            {
+                "name": "weather_api",
+                "arguments": {
+                    "city": "北京",
+                    "date": "today"
+                },
+                "result": {
+                    "temp": 12,
+                    "condition": "晴",
+                    "wind": "北风3级",
+                    "humidity": 45
+                },
+                "success": true
+            }
+        ],
+        "decision_steps": [
+            {
+                "thought": "用户想了解北京天气，需要调用天气API"
+            },
+            {
+                "thought": "获取到天气数据：12度晴天，需要给出穿衣建议"
+            },
+            {
+                "thought": "根据温度和风力，建议穿薄外套"
+            }
+        ],
+        "final_output": "北京今天天气晴朗，气温12℃，北风3级，湿度45%。\n\n穿衣建议：早晚温差较大，建议穿薄外套或卫衣，中午可适当减少衣物。风力稍大，注意防风。",
+        "success": true,
+        "latency_ms": 1245,
+        "ttft_ms": 180,
+        "token_usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 85,
+            "total_tokens": 205
+        }
+    },
+    {
+        "session_id": "agent_search_fail_001",
+        "eval_type": "agent",
+        "task": "帮我查询上海到北京的机票",
+        "task_description": "用户想查询机票信息，但Agent未能正确完成任务",
+        "tool_calls": [
+            {
+                "name": "flight_search",
+                "arguments": {
+                    "from": "上海",
+                    "to": "北京"
+                },
+                "result": "Error: API rate limit exceeded",
+                "success": false
+            }
+        ],
+        "decision_steps": [
+            {
+                "thought": "用户需要机票信息，调用航班搜索API"
+            },
+            {
+                "thought": "API返回错误，无法获取数据"
+            },
+            {
+                "thought": "直接告诉用户失败了"
+            }
+        ],
+        "final_output": "查询失败，API报错了。",
+        "success": false,
+        "latency_ms": 890,
+        "ttft_ms": 120,
+        "token_usage": {
+            "prompt_tokens": 80,
+            "completion_tokens": 15,
+            "total_tokens": 95
+        }
+    },
+    {
+        "session_id": "agent_code_gen_001",
+        "eval_type": "agent",
+        "task": "写一个Python函数计算斐波那契数列的第n项",
+        "task_description": "用户需要一个计算斐波那契数列的Python函数，Agent需要生成正确可运行的代码",
+        "tool_calls": [
+            {
+                "name": "code_generator",
+                "arguments": {
+                    "language": "python",
+                    "task": "fibonacci"
+                },
+                "result": "代码已生成",
+                "success": true
+            },
+            {
+                "name": "code_runner",
+                "arguments": {
+                    "code": "def fib(n): return n if n<=1 else fib(n-1)+fib(n-2)",
+                    "test": "fib(10)"
+                },
+                "result": {
+                    "output": 55,
+                    "success": true
+                },
+                "success": true
+            }
+        ],
+        "decision_steps": [
+            {
+                "thought": "分析任务：需要生成斐波那契函数"
+            },
+            {
+                "thought": "选择递归实现方式，简洁易懂"
+            },
+            {
+                "thought": "生成代码并运行测试验证正确性"
+            },
+            {
+                "thought": "测试通过，返回完整解答"
+            }
+        ],
+        "final_output": "这是计算斐波那契数列第n项的Python函数：\n\n```python\ndef fibonacci(n):\n    \"\"\"计算斐波那契数列的第n项\"\"\"\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n```\n\n使用示例：\n- `fibonacci(10)` 返回 55\n- `fibonacci(20)` 返回 6765\n\n注意：对于大数n，建议使用动态规划优化，避免重复计算。",
+        "success": true,
+        "latency_ms": 2340,
+        "ttft_ms": 250,
+        "token_usage": {
+            "prompt_tokens": 150,
+            "completion_tokens": 180,
+            "total_tokens": 330
+        }
+    },
+    {
+        "session_id": "agent_data_analysis_001",
+        "eval_type": "agent",
+        "task": "分析销售数据并生成报告",
+        "task_description": "用户上传了销售CSV文件，需要Agent分析数据并生成可视化报告",
+        "tool_calls": [
+            {
+                "name": "file_reader",
+                "arguments": {
+                    "path": "sales_2024.csv"
+                },
+                "result": {
+                    "rows": 1200,
+                    "columns": [
+                        "date",
+                        "product",
+                        "quantity",
+                        "revenue"
+                    ]
+                },
+                "success": true
+            },
+            {
+                "name": "data_analyzer",
+                "arguments": {
+                    "operation": "summary"
+                },
+                "result": {
+                    "total_revenue": 125000,
+                    "top_product": "Product A",
+                    "growth": "15%"
+                },
+                "success": true
+            },
+            {
+                "name": "chart_generator",
+                "arguments": {
+                    "type": "line",
+                    "data": "monthly_revenue"
+                },
+                "result": {
+                    "chart_url": "/charts/revenue_trend.png"
+                },
+                "success": true
+            }
+        ],
+        "decision_steps": [
+            {
+                "thought": "首先读取CSV文件了解数据结构"
+            },
+            {
+                "thought": "数据包含日期、产品、数量、收入四列，共1200条记录"
+            },
+            {
+                "thought": "进行数据汇总分析，计算关键指标"
+            },
+            {
+                "thought": "生成可视化图表展示趋势"
+            },
+            {
+                "thought": "整理成完整报告返回"
+            }
+        ],
+        "final_output": "## 销售数据分析报告\n\n### 数据概览\n- 记录总数：1,200条\n- 时间范围：2024年全年\n\n### 关键指标\n- 总收入：¥125,000\n- 最畅销产品：Product A\n- 同比增长：15%\n\n### 趋势分析\n[收入趋势图已生成]\n\n### 建议\n1. 继续加大Product A的推广力度\n2. Q2和Q4是销售旺季，提前备货\n3. 关注低销量产品，考虑优化或下架",
+        "success": true,
+        "latency_ms": 4560,
+        "ttft_ms": 350,
+        "token_usage": {
+            "prompt_tokens": 280,
+            "completion_tokens": 320,
+            "total_tokens": 600
+        }
+    },
+    {
+        "session_id": "agent_loop_fail_001",
+        "eval_type": "agent",
+        "task": "帮我订一张明天去上海的火车票",
+        "task_description": "用户需要订火车票，但Agent陷入了无效循环",
+        "tool_calls": [
+            {
+                "name": "train_search",
+                "arguments": {
+                    "from": "北京",
+                    "to": "上海",
+                    "date": "tomorrow"
+                },
+                "result": "需要登录",
+                "success": false
+            },
+            {
+                "name": "train_search",
+                "arguments": {
+                    "from": "北京",
+                    "to": "上海",
+                    "date": "tomorrow"
+                },
+                "result": "需要登录",
+                "success": false
+            },
+            {
+                "name": "train_search",
+                "arguments": {
+                    "from": "北京",
+                    "to": "上海",
+                    "date": "tomorrow"
+                },
+                "result": "需要登录",
+                "success": false
+            }
+        ],
+        "decision_steps": [
+            {
+                "thought": "用户要订火车票，调用火车票搜索API"
+            },
+            {
+                "thought": "返回需要登录，再试一次"
+            },
+            {
+                "thought": "还是需要登录，再试一次"
+            },
+            {
+                "thought": "依然失败..."
+            }
+        ],
+        "final_output": "抱歉，系统一直提示需要登录，我无法完成订票。",
+        "success": false,
+        "latency_ms": 6780,
+        "ttft_ms": 180,
+        "token_usage": {
+            "prompt_tokens": 450,
+            "completion_tokens": 25,
+            "total_tokens": 475
+        }
+    },
+    {
+        "session_id": "agent_no_tool_001",
+        "eval_type": "agent",
+        "task": "帮我发送一封邮件给老板",
+        "task_description": "用户需要发邮件，但Agent没有调用任何工具",
+        "tool_calls": [],
+        "decision_steps": [
+            {
+                "thought": "用户想发邮件，但我没有邮件发送的工具"
+            }
+        ],
+        "final_output": "我无法帮您发送邮件，因为我没有相关的工具。",
+        "success": false,
+        "latency_ms": 345,
+        "ttft_ms": 80,
+        "token_usage": {
+            "prompt_tokens": 50,
+            "completion_tokens": 18,
+            "total_tokens": 68
+        }
+    },
+    {
+        "session_id": "agent_multi_step_001",
+        "eval_type": "agent",
+        "task": "帮我制定一个去日本旅行7天的行程",
+        "task_description": "用户需要完整的日本7日游行程规划，Agent需要综合调用多个工具完成复杂任务",
+        "tool_calls": [
+            {
+                "name": "destination_research",
+                "arguments": {
+                    "country": "日本",
+                    "duration": 7
+                },
+                "result": {
+                    "popular_cities": [
+                        "东京",
+                        "京都",
+                        "大阪"
+                    ],
+                    "best_season": "春秋"
+                },
+                "success": true
+            },
+            {
+                "name": "flight_search",
+                "arguments": {
+                    "to": "东京",
+                    "return_from": "大阪"
+                },
+                "result": {
+                    "outbound": "CA123 北京-东京",
+                    "return": "CA456 大阪-北京"
+                },
+                "success": true
+            },
+            {
+                "name": "hotel_search",
+                "arguments": {
+                    "cities": [
+                        "东京",
+                        "京都",
+                        "大阪"
+                    ]
+                },
+                "result": {
+                    "tokyo": "新宿王子酒店",
+                    "kyoto": "四条河原町酒店",
+                    "osaka": "难波酒店"
+                },
+                "success": true
+            },
+            {
+                "name": "attraction_search",
+                "arguments": {
+                    "cities": [
+                        "东京",
+                        "京都",
+                        "大阪"
+                    ]
+                },
+                "result": {
+                    "attractions": [
+                        "浅草寺",
+                        "东京塔",
+                        "清水寺",
+                        "金阁寺",
+                        "大阪城",
+                        "环球影城"
+                    ]
+                },
+                "success": true
+            }
+        ],
+        "decision_steps": [
+            {
+                "thought": "7天日本游需要规划城市路线，常见是东京-京都-大阪"
+            },
+            {
+                "thought": "先调研目的地热门景点和最佳时间"
+            },
+            {
+                "thought": "搜索机票，选择东京进大阪出的路线"
+            },
+            {
+                "thought": "为每个城市搜索酒店"
+            },
+            {
+                "thought": "查找各城市的热门景点"
+            },
+            {
+                "thought": "整合所有信息，制定详细行程"
+            }
+        ],
+        "final_output": "# 日本7日游行程规划\n\n## 行程概览\n- **路线**：东京(3天) → 京都(2天) → 大阪(2天)\n- **机票**：CA123 北京-东京 / CA456 大阪-北京\n\n## 详细行程\n\n### Day 1-3: 东京\n- 住宿：新宿王子酒店\n- 景点：浅草寺、东京塔、涩谷、秋叶原\n\n### Day 4-5: 京都\n- 住宿：四条河原町酒店\n- 景点：清水寺、金阁寺、岚山竹林\n\n### Day 6-7: 大阪\n- 住宿：难波酒店\n- 景点：大阪城、环球影城、道顿堀\n\n## 预算参考\n- 机票：约¥3500\n- 酒店：约¥5000\n- 餐饮+交通+门票：约¥4000\n- **总计：约¥12500**\n\n需要我帮您预订吗？",
+        "success": true,
+        "latency_ms": 8900,
+        "ttft_ms": 420,
+        "token_usage": {
+            "prompt_tokens": 580,
+            "completion_tokens": 450,
+            "total_tokens": 1030
+        }
+    }
+]

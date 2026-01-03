@@ -11,14 +11,16 @@ from agent import RealAgent
 from prompt_optimizer import OmegaPromptForge
 from workflow_parser import DifyWorkflowParser
 from database import get_database
+from trace_store import TraceStore, init_db
+from eval_dispatcher import run_evaluation_task  # 🆕 v0.8.0: 引入统一评测调度器 # 🆕 v0.3.0: Trace 追踪
 
 # ==========================================
 # 页面配置
 # ==========================================
 st.set_page_config(
-    page_title="AI 对话评测系统 Pro", 
+    page_title="KST Agent 评估系统 Pro", 
     layout="wide", 
-    page_icon="⚖️",
+    page_icon="🤖",
     initial_sidebar_state="expanded"
 )
 
@@ -52,7 +54,7 @@ DEMO_STEPS = [
 # ==========================================
 @st.cache_data
 def get_logo_base64():
-    logo_path = Path(__file__).parent / "logo.png"
+    logo_path = Path(__file__).parent / "assets/logo.png"
     if logo_path.exists():
         with open(logo_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
@@ -113,11 +115,12 @@ footer {visibility: hidden;}
 }
 
 .logo-text {
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 700;
     background: var(--primary-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    white-space: nowrap;
 }
 
 .logo-version {
@@ -392,103 +395,59 @@ with st.sidebar:
         <div class="logo-container">
             <img src="data:image/png;base64,{LOGO_BASE64}" alt="Logo"/>
             <div>
-                <div class="logo-text">AI 对话评测系统</div>
-                <div class="logo-version">Pro v2.0</div>
+                <div class="logo-text">KST Agent 评估系统</div>
+                <div class="logo-version">Pro v3.0</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="logo-container">
-            <div style="font-size: 1.8rem;">⚖️</div>
+            <div style="font-size: 1.8rem;">🤖</div>
             <div>
-                <div class="logo-text">AI 对话评测系统</div>
-                <div class="logo-version">Pro v2.0</div>
+                <div class="logo-text">KST Agent 评估系统</div>
+                <div class="logo-version">Pro v3.0</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
     
-    # 导航
-    st.caption("主要功能")
+    # ==========================================
+    # 🆕 v0.6.0: 简洁侧边栏导航 (4 入口)
+    # ==========================================
     
-    if st.button("📊 工作台", use_container_width=True, 
+    st.caption("导航")
+    
+    # 1. 首页看板 (含统计)
+    if st.button("📊 首页看板", use_container_width=True, 
                  type="primary" if st.session_state['current_page'] == 'dashboard' else "secondary"):
         st.session_state['current_page'] = 'dashboard'
         st.rerun()
     
-    if st.button("📜 日志回放", use_container_width=True,
-                 type="primary" if st.session_state['current_page'] == 'logs' else "secondary"):
-        st.session_state['current_page'] = 'logs'
+    # 2. 评测中心
+    if st.button("🚀 评测中心", use_container_width=True,
+                 type="primary" if st.session_state['current_page'] == 'eval_center' else "secondary"):
+        st.session_state['current_page'] = 'eval_center'
         st.rerun()
     
-    if st.button("🚀 智能评测", use_container_width=True,
-                 type="primary" if st.session_state['current_page'] == 'eval' else "secondary"):
-        st.session_state['current_page'] = 'eval'
+    # 3. 数据浏览 (整合日志 + Trace + 历史 + 低分)
+    if st.button("📜 数据浏览", use_container_width=True,
+                 type="primary" if st.session_state['current_page'] == 'data_explorer' else "secondary"):
+        st.session_state['current_page'] = 'data_explorer'
         st.rerun()
     
-    if st.button("🔍 低分分析", use_container_width=True,
-                 type="primary" if st.session_state['current_page'] == 'analysis' else "secondary"):
-        st.session_state['current_page'] = 'analysis'
+    # 4. 系统设置 (整合 rubric + prompt)
+    if st.button("⚙️ 系统设置", use_container_width=True,
+                 type="primary" if st.session_state['current_page'] == 'settings' else "secondary"):
+        st.session_state['current_page'] = 'settings'
         st.rerun()
     
-    if st.button("📚 历史评测", use_container_width=True,
-                 type="primary" if st.session_state['current_page'] == 'history' else "secondary"):
-        st.session_state['current_page'] = 'history'
-        st.rerun()
-    
-    st.caption("系统设置")
-    
-    if st.button("🛠️ 评分标准配置", use_container_width=True,
-                 type="primary" if st.session_state['current_page'] == 'rubric' else "secondary"):
-        st.session_state['current_page'] = 'rubric'
-        st.rerun()
-    
-    if st.button("🎨 Prompt 工坊", use_container_width=True,
-                 type="primary" if st.session_state['current_page'] == 'prompt' else "secondary"):
-        st.session_state['current_page'] = 'prompt'
-        st.rerun()
-    
-    st.divider()
-    
-    # 数据源配置
-    with st.expander("📁 数据源配置", expanded=False):
-        st.caption("日志文件")
-        log_file = st.text_input("日志路径", "test_cases1.json", label_visibility="collapsed")
-        
-        st.caption("评分标准")
-        rubric_file = st.text_input("标准路径", "rubric.json", label_visibility="collapsed")
-        
-        st.caption("工作流文件 (可选)")
-        workflow_file = st.text_input("工作流路径", "Dify.yml", label_visibility="collapsed")
-        
-        if st.button("📂 加载全部", use_container_width=True):
-            st.session_state['logs_data'] = load_json_path(log_file)
-            st.session_state['rubric_data'] = load_json_path(rubric_file)
-            
-            # 加载工作流
-            try:
-                st.session_state['workflow_parser'] = DifyWorkflowParser(workflow_path=workflow_file)
-                st.success("✅ 工作流已加载")
-            except Exception as e:
-                st.session_state['workflow_parser'] = None
-                st.warning(f"⚠️ 工作流加载失败: {e}")
-            
-            st.rerun()
-    
-    # 工作流状态
+    # 工作流状态指示
     if st.session_state.get('workflow_parser'):
         summary = st.session_state['workflow_parser'].get_workflow_summary()
         st.markdown(f"""
         <div class="workflow-status workflow-loaded">
             ✅ 工作流: {summary['name'][:20]}...<br/>
             📍 {summary['llm_nodes_count']} 个 LLM 节点
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="workflow-status workflow-not-loaded">
-            ⚠️ 未加载工作流<br/>
-            低分分析将不含节点溯源
         </div>
         """, unsafe_allow_html=True)
     
@@ -516,9 +475,9 @@ with st.sidebar:
 # 数据加载
 # ==========================================
 if 'logs_data' not in st.session_state:
-    st.session_state['logs_data'] = load_json_path("test_cases1.json")
+    st.session_state['logs_data'] = load_json_path("data/test_cases1.json")
 if 'rubric_data' not in st.session_state:
-    st.session_state['rubric_data'] = load_json_path("rubric.json")
+    st.session_state['rubric_data'] = load_json_path("config/rubric.json")
 
 logs_data = st.session_state.get('logs_data')
 rubric_data = st.session_state.get('rubric_data')
@@ -530,58 +489,197 @@ workflow_parser = st.session_state.get('workflow_parser')
 current_page = st.session_state['current_page']
 
 # -----------------------------------------------------------------------------
-# Dashboard
+# Dashboard - 🆕 v0.6.0: 首页看板 (模式切换 + 三图表)
 # -----------------------------------------------------------------------------
 if current_page == 'dashboard':
-    st.markdown('<h1 class="main-title">📊 工作台</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-title">欢迎使用 AI 对话评测系统 v2.0 - 支持工作流溯源</p>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">📊 首页看板</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">AI 对话评测系统 Pro v3.0 | 评测数据可视化看板</p>', unsafe_allow_html=True)
     
-    col1, col2, col3, col4 = st.columns(4)
+    # 🆕 模式切换器
+    if 'dashboard_mode' not in st.session_state:
+        st.session_state['dashboard_mode'] = 'all'
     
-    session_count = len(logs_data) if logs_data else 0
-    rubric_count = len(rubric_data.get('rubrics', [])) if rubric_data else 0
-    eval_count = len(st.session_state.get('eval_results', []))
-    low_score_count = sum(len(r.get('low_score_analyses', [])) for r in st.session_state.get('eval_results', []))
-    
-    with col1:
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{session_count}</div><div class="metric-label">已加载会话</div></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{rubric_count}</div><div class="metric-label">评分维度</div></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{eval_count}</div><div class="metric-label">已完成评测</div></div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{low_score_count}</div><div class="metric-label">低分警示</div></div>', unsafe_allow_html=True)
+    mode_col1, mode_col2, mode_col3, mode_col4 = st.columns(4)
+    with mode_col1:
+        if st.button("📊 全部", use_container_width=True, 
+                     type="primary" if st.session_state['dashboard_mode'] == 'all' else "secondary"):
+            st.session_state['dashboard_mode'] = 'all'
+            st.rerun()
+    with mode_col2:
+        if st.button("💬 单轮对话", use_container_width=True,
+                     type="primary" if st.session_state['dashboard_mode'] == 'single_turn' else "secondary"):
+            st.session_state['dashboard_mode'] = 'single_turn'
+            st.rerun()
+    with mode_col3:
+        if st.button("🔄 多轮对话", use_container_width=True,
+                     type="primary" if st.session_state['dashboard_mode'] == 'multi_turn' else "secondary"):
+            st.session_state['dashboard_mode'] = 'multi_turn'
+            st.rerun()
+    with mode_col4:
+        if st.button("🤖 Agent", use_container_width=True,
+                     type="primary" if st.session_state['dashboard_mode'] == 'agent' else "secondary"):
+            st.session_state['dashboard_mode'] = 'agent'
+            st.rerun()
     
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     
-    # 快捷操作
-    st.markdown("### ⚡ 快捷操作")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        if st.button("🚀 开始评测", use_container_width=True, type="primary"):
-            st.session_state['current_page'] = 'eval'
-            st.rerun()
-    with c2:
-        if st.button("🔍 查看低分分析", use_container_width=True):
-            st.session_state['current_page'] = 'analysis'
-            st.rerun()
-    with c3:
-        if st.button("📜 查看日志", use_container_width=True):
-            st.session_state['current_page'] = 'logs'
-            st.rerun()
-    with c4:
-        if st.button("🎨 Prompt 工坊", use_container_width=True):
-            st.session_state['current_page'] = 'prompt'
-            st.rerun()
+    # 获取当前模式的统计数据
+    current_mode = st.session_state['dashboard_mode']
+    mode_label = {'all': '全部', 'single_turn': '单轮对话', 'multi_turn': '多轮对话', 'agent': 'Agent'}[current_mode]
     
-    # 状态
-    if logs_data and rubric_data:
-        if workflow_parser:
-            st.success("✅ 数据和工作流已就绪，可以开始评测 (含节点溯源)")
+    stats = TraceStore.get_dashboard_stats(eval_type=current_mode if current_mode != 'all' else None)
+    
+    # 统计卡片
+    st.markdown(f"### 📈 {mode_label}评测统计")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{stats["trace_count"]}</div><div class="metric-label">评测记录</div></div>', unsafe_allow_html=True)
+    with col2:
+        avg_color = "🟢" if stats["avg_score"] >= 4 else ("🟡" if stats["avg_score"] >= 3 else "🔴")
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{stats["avg_score"]}/5 {avg_color}</div><div class="metric-label">平均分</div></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{stats["excellent_rate"]}%</div><div class="metric-label">优秀率(≥4分)</div></div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{stats["low_score_count"]}</div><div class="metric-label">低分项(<3分)</div></div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    
+    # 🆕 三个图表区域
+    if stats['dimension_stats']:
+        st.markdown("### 📊 数据可视化")
+        # ===============================
+        # 🆕 Dashboard Vis 2.0 (Plotly 高级图表)
+        # ===============================
+        
+        # 获取用于可视化的高级数据 (Lightweight)
+        eval_type_filter = current_mode if current_mode != 'all' else None
+        viz_data = TraceStore.get_viz_data(eval_type=eval_type_filter, limit=500)
+        
+        if not viz_data:
+            st.info("暂无足够数据生成高级图表。")
         else:
-            st.info("ℹ️ 数据已就绪。若需节点溯源，请加载工作流 YML")
+            viz_df = pd.DataFrame(viz_data)
+            viz_df['created_at'] = pd.to_datetime(viz_df['created_at'])
+            viz_df['date_hour'] = viz_df['created_at'].dt.strftime('%m-%d %H:00')
+            
+            # --- Row 1: 趋势与容量 (Combo Chart) ---
+            st.markdown("##### 📈 评测趋势与质量波动 (Trend & Volume)")
+            
+            trend = viz_df.groupby('date_hour').agg(
+                count=('trace_id', 'count'),
+                avg_score=('avg_score', 'mean')
+            ).reset_index().sort_values('date_hour')
+            
+            fig_combo = go.Figure()
+            # Bar: Volume
+            fig_combo.add_trace(go.Bar(
+                x=trend['date_hour'], y=trend['count'], name='评测数量',
+                marker_color='#3b82f6', opacity=0.3
+            ))
+            # Line: Score
+            fig_combo.add_trace(go.Scatter(
+                x=trend['date_hour'], y=trend['avg_score'], name='平均分',
+                yaxis='y2', line=dict(color='#ef4444', width=3), mode='lines+markers'
+            ))
+            
+            fig_combo.update_layout(
+                yaxis=dict(title='评测数量'),
+                yaxis2=dict(title='平均分', overlaying='y', side='right', range=[0, 5.2]),
+                hovermode='x unified',
+                height=300,
+                margin=dict(l=20, r=20, t=10, b=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_combo, use_container_width=True)
+            
+            # --- Row 2: 关联分析 & 维度诊断 ---
+            col_v1, col_v2 = st.columns(2)
+            
+            with col_v1:
+                st.markdown("##### 🔬 性能与质量关联 (Performance)")
+                # Prep scatter data
+                scatter_data = []
+                for d in viz_data:
+                    metrics = d.get('metrics', {})
+                    # 尝试不同字段
+                    tokens = metrics.get('token_usage', {}).get('total_tokens', 0)
+                    if tokens == 0:
+                        # Fallback for simple structure
+                        tokens = metrics.get('total_tokens', 0)
+                        
+                    scatter_data.append({
+                        'score': d['avg_score'],
+                        'latency': d['latency_ms'] or 0,
+                        'tokens': tokens,
+                        'type': d['eval_type']
+                    })
+                sdf = pd.DataFrame(scatter_data)
+                
+                if not sdf.empty and sdf['latency'].max() > 0:
+                    fig_scatter = px.scatter(
+                        sdf, x='latency', y='score', color='type',
+                        size='tokens', size_max=15,
+                        labels={'latency': '响应耗时 (ms)', 'score': '质量分', 'type': '模式', 'tokens': 'Tokens'},
+                        color_discrete_map={'single_turn': '#6366f1', 'multi_turn': '#10b981', 'agent': '#f59e0b'}
+                    )
+                    # 及格线
+                    fig_scatter.add_hline(y=3.0, line_dash="dash", line_color="red", opacity=0.5)
+                    fig_scatter.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20))
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+                else:
+                    st.caption("暂无足够的性能指标数据用于关联分析")
+
+            with col_v2:
+                st.markdown("##### 🎯 维度能力矩阵 (Heatmap)")
+                # Prep heatmap data
+                dim_rows = []
+                for d in viz_data:
+                    etype = d['eval_type']
+                    # 获取 scores
+                    for s_name, s_val in d.get('scores', {}).items():
+                        dim_rows.append({'type': etype, 'dimension': s_name, 'score': s_val})
+                
+                ddf = pd.DataFrame(dim_rows)
+                if not ddf.empty:
+                    # Pivoting
+                    hm = ddf.groupby(['type', 'dimension'])['score'].mean().reset_index()
+                    pivot = hm.pivot(index='type', columns='dimension', values='score')
+                    
+                    if not pivot.empty:
+                        fig_heat = px.imshow(
+                            pivot,
+                            labels=dict(x="维度", y="模式", color="得分"),
+                            x=pivot.columns,
+                            y=pivot.index,
+                            color_continuous_scale='RdBu', range_color=[1, 5],
+                            text_auto='.1f', aspect="auto"
+                        )
+                        fig_heat.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20))
+                        st.plotly_chart(fig_heat, use_container_width=True)
+                    else:
+                        st.caption("数据不足以生成矩阵")
+                else:
+                    st.caption("暂无维度评分数据")
+        
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        
+        # 薄弱维度提示
+        if stats['dimension_stats']:
+            weakest = min(stats['dimension_stats'].items(), key=lambda x: x[1]['avg'])
+            strongest = max(stats['dimension_stats'].items(), key=lambda x: x[1]['avg'])
+            
+            hint_col1, hint_col2 = st.columns(2)
+            with hint_col1:
+                if weakest[1]['avg'] < 4:
+                    st.warning(f"⚠️ **薄弱维度**: {weakest[0]} ({weakest[1]['avg']}/5)")
+                else:
+                    st.success(f"✅ 所有维度表现良好 (均 ≥ 4分)")
+            with hint_col2:
+                st.info(f"🏆 **最强维度**: {strongest[0]} ({strongest[1]['avg']}/5)")
     else:
-        st.warning("⚠️ 请先在侧边栏加载数据")
+        # 无数据时的提示
+        st.info(f"📊 当前模式「{mode_label}」暂无评测数据。完成评测后，这里将显示统计图表。")
 
 # -----------------------------------------------------------------------------
 # 日志回放 (增强版：三栏布局 + 评测结果对比)
@@ -1270,6 +1368,989 @@ elif current_page == 'history':
     
     except Exception as e:
         st.error(f"数据库访问失败: {str(e)}")
+
+# ==========================================
+# 🆕 v0.3.0: Trace 追踪页面
+# ==========================================
+elif current_page == 'trace':
+    if st.button("← 返回工作台"):
+        st.session_state['current_page'] = 'dashboard'
+        st.rerun()
+    
+    st.markdown('<h1 class="main-title">🔍 Trace 追踪</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">查看评测调用记录 - Langfuse 风格可观测性</p>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        session_filter = st.text_input("🔎 按 Session ID 筛选", "", placeholder="输入 session_id...")
+    with col2:
+        type_filter = st.selectbox("📋 评测类型", ["all", "single_turn", "multi_turn", "agent"])
+    with col3:
+        limit = st.slider("显示条数", 10, 100, 30)
+    
+    try:
+        traces = TraceStore.list_traces(
+            session_id=session_filter if session_filter else None,
+            eval_type=type_filter if type_filter != "all" else None,
+            limit=limit
+        )
+        trace_count = TraceStore.get_trace_count()
+        st.markdown(f"### 📊 共 **{trace_count}** 条记录 (显示 {len(traces)} 条)")
+        
+        if not traces:
+            st.info("暂无 Trace 记录。运行评测后，记录将自动保存到这里。")
+        else:
+            for trace in traces:
+                avg_score = trace.get('avg_score') or 0
+                color = "🟢" if avg_score >= 4 else "🟡" if avg_score >= 3 else "🔴"
+                created = trace.get('created_at', '')[:16] if trace.get('created_at') else ''
+                title = f"{color} {trace['trace_id']} | {trace['session_id'][:15]}... | {avg_score:.1f}/5 | {trace['eval_type']} | {created}"
+                
+                with st.expander(title):
+                    detail = TraceStore.get_trace(trace['trace_id'])
+                    if detail:
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            st.caption(f"🤖 模型: {detail.get('model', 'N/A')}")
+                        with c2:
+                            st.caption(f"⏱️ 耗时: {detail.get('latency_ms', 0)}ms")
+                        with c3:
+                            st.caption(f"📝 评分数: {len(detail.get('scores', []))}")
+                        
+                        io1, io2 = st.columns(2)
+                        with io1:
+                            st.markdown("**📥 输入**")
+                            st.json(detail.get('input_data', {}))
+                        with io2:
+                            st.markdown("**📤 输出**")
+                            st.json(detail.get('output_data', {}))
+                        
+                        st.markdown("**⭐ 评分**")
+                        for score in detail.get('scores', []):
+                            val = score['value']
+                            icon = "🟢" if val >= 4 else "🟡" if val >= 3 else "🔴"
+                            st.markdown(f"{icon} **{score['name']}**: {val}/5")
+    except Exception as e:
+        st.error(f"加载 Trace 数据失败: {str(e)}")
+
+# ==========================================
+# 🆕 v0.4.0: 统计看板页面
+# ==========================================
+elif current_page == 'stats':
+    if st.button("← 返回工作台"):
+        st.session_state['current_page'] = 'dashboard'
+        st.rerun()
+    
+    st.markdown('<h1 class="main-title">📊 统计看板</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">评测质量总览 - 维度分析 + Bad Case 追踪</p>', unsafe_allow_html=True)
+    
+    try:
+        # 获取统计数据
+        stats = TraceStore.get_dimension_stats()
+        trace_count = TraceStore.get_trace_count()
+        low_scores = TraceStore.get_low_score_traces(threshold=3, limit=10)
+        
+        # 顶部汇总
+        st.markdown(f"### 📈 总体概览 (共 {trace_count} 条 Trace)")
+        
+        if not stats:
+            st.info("暂无评分数据。运行评测后，统计将自动生成。")
+        else:
+            # 维度指标卡片
+            cols = st.columns(len(stats))
+            for i, (dim, data) in enumerate(stats.items()):
+                with cols[i]:
+                    avg = data['avg']
+                    color = "🟢" if avg >= 4 else "🟡" if avg >= 3 else "🔴"
+                    delta = "⚠️" if avg < 3 else ""
+                    st.metric(
+                        label=f"{color} {dim[:15]}",
+                        value=f"{avg}/5",
+                        delta=f"n={data['count']}"
+                    )
+            
+            st.divider()
+            
+            # 图表区域
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 📊 维度平均分")
+                import pandas as pd
+                df = pd.DataFrame([
+                    {"维度": k[:12], "平均分": v['avg'], "样本数": v['count']}
+                    for k, v in stats.items()
+                ])
+                fig = px.bar(df, x="维度", y="平均分", color="平均分",
+                            color_continuous_scale=["red", "yellow", "green"],
+                            range_color=[1, 5])
+                fig.update_layout(height=350)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.markdown("#### 📈 雷达图分布")
+                dimensions = list(stats.keys())[:6]  # 最多显示6个
+                values = [stats[d]['avg'] for d in dimensions]
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatterpolar(
+                    r=values + [values[0]],
+                    theta=dimensions + [dimensions[0]],
+                    fill='toself',
+                    name='当前得分'
+                ))
+                fig.update_layout(
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 5])),
+                    height=350
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # 薄弱维度警告
+            weak = [k for k, v in stats.items() if v['avg'] < 3]
+            if weak:
+                st.warning(f"⚠️ **薄弱维度**: {', '.join(weak)} (平均分 < 3)")
+            
+            st.divider()
+            
+            # 低分记录列表
+            st.markdown("#### 🔴 近期低分记录 (score < 3)")
+            if low_scores:
+                for item in low_scores:
+                    created = item.get('created_at', '')[:16] if item.get('created_at') else ''
+                    st.error(
+                        f"**{item['trace_id']}** | {item['session_id'][:15]}... | "
+                        f"**{item['dimension']}**: {item['score']}/5 | {created}"
+                    )
+                    if item.get('reasoning'):
+                        st.caption(f"理由: {item['reasoning'][:80]}...")
+            else:
+                st.success("🎉 暂无低分记录，质量表现优秀！")
+    
+    except Exception as e:
+        st.error(f"加载统计数据失败: {str(e)}")
+
+# ==========================================
+# 🆕 v0.6.0: 评测中心页面 (整合数据源 + 维度配置 + 评测)
+# ==========================================
+elif current_page == 'eval_center':
+    if st.button("← 返回工作台"):
+        st.session_state['current_page'] = 'dashboard'
+        st.rerun()
+    
+    st.markdown('<h1 class="main-title">🚀 评测中心</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">一站式评测配置与执行</p>', unsafe_allow_html=True)
+    
+    # Step 1: 选择评测类型
+    st.markdown("### Step 1: 选择评测类型")
+    
+    # 模型配置检查
+    with st.expander("🛠️ 模型配置检查 (Debug)", expanded=False):
+        try:
+            temp_agent = RealAgent()
+            st.info(f"当前使用的模型: **{temp_agent.model_name}**")
+            # Mask API Key safely
+            key_preview = "N/A"
+            if temp_agent.client.api_key:
+                key_str = str(temp_agent.client.api_key)
+                if len(key_str) > 8:
+                    key_preview = f"{key_str[:8]}...****"
+                else:
+                    key_preview = "****"
+            
+            st.code(f"Base URL: {temp_agent.client.base_url}\nAPI Key: {key_preview}")
+        except Exception as e:
+            st.error(f"模型初始化失败: {e}")
+            
+    eval_type = st.radio(
+        "评测类型",
+        ["🔄 自动识别", "💬 单轮评测", "🗣️ 多轮评测", "🤖 Agent 评测"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    st.divider()
+    
+    # Step 2 + Step 3: 左右布局
+    col_data, col_rubric = st.columns(2)
+    
+    with col_data:
+        st.markdown("### Step 2: 数据源配置")
+        
+        source_type = st.radio(
+            "数据来源",
+            ["📤 上传 JSON 文件", "📂 选择历史日志", "🔗 输入 Session ID"],
+            label_visibility="collapsed"
+        )
+        
+        if source_type == "📤 上传 JSON 文件":
+            uploaded = st.file_uploader("上传评测数据", type=['json'], key="eval_center_upload")
+            if uploaded:
+                try:
+                    data = json.load(uploaded)
+                    st.session_state['eval_center_data'] = data if isinstance(data, list) else [data]
+                    st.success(f"✅ 已加载 {len(st.session_state['eval_center_data'])} 条数据")
+                except Exception as e:
+                    st.error(f"解析失败: {e}")
+        
+        elif source_type == "📂 选择历史日志":
+            # 自动扫描 data 目录
+            data_dir = Path("data")
+            json_files = list(data_dir.glob("*.json")) if data_dir.exists() else []
+            json_options = [str(f) for f in json_files]
+            
+            if not json_options:
+                st.warning("⚠️ data/ 目录下未找到 JSON 文件")
+                log_path = st.text_input("日志文件路径", "data/test_cases1.json")
+            else:
+                log_path = st.selectbox("选择日志文件", json_options, index=0 if json_options else None)
+            
+            if st.button("📂 加载日志", key="load_log_btn"):
+                data = load_json_path(log_path)
+                if data:
+                    st.session_state['eval_center_data'] = data
+                    # 提示已移至下方统一显示，避免重复
+        
+        elif source_type == "🔗 输入 Session ID":
+            session_id = st.text_input("Session ID", placeholder="输入要评测的 Session ID...")
+            if session_id:
+                st.info(f"将评测 Session: {session_id}")
+        
+        # 显示已加载数据统计
+        if st.session_state.get('eval_center_data'):
+            data = st.session_state['eval_center_data']
+            st.markdown(f"**📊 已加载: {len(data)} 条数据**")
+    
+    with col_rubric:
+        st.markdown("### Step 3: 评测维度配置")
+        
+        # 加载 rubric
+        rubric_data = st.session_state.get('rubric_data') or load_json_path("config/rubric.json")
+        
+        # 处理两种格式: 列表或字典
+        dimensions = []
+        if rubric_data:
+            if isinstance(rubric_data, dict) and 'rubrics' in rubric_data:
+                dims = rubric_data['rubrics']
+                dimensions = dims if isinstance(dims, list) else dims.get('shared', [])
+            elif isinstance(rubric_data, list):
+                dimensions = rubric_data
+        
+        if dimensions:
+            st.markdown("**选择启用的维度:**")
+            selected_dims = []
+            for dim in dimensions:
+                dim_name = dim.get('name', 'unknown') if isinstance(dim, dict) else str(dim)
+                if st.checkbox(f"{dim_name}", value=True, key=f"dim_{dim_name}"):
+                    selected_dims.append(dim)
+            
+            st.caption(f"已选择 {len(selected_dims)}/{len(dimensions)} 个维度")
+        else:
+            st.warning("请先配置评分标准 (rubric.json)")
+    
+    st.divider()
+    
+    # Step 4: 开始评测
+    st.markdown("### Step 4: 开始评测")
+    
+    col_btn, col_status = st.columns([1, 2])
+    with col_btn:
+        start_eval = st.button("▶️ 开始评测", use_container_width=True, type="primary")
+    
+    with col_status:
+        if st.session_state.get('eval_center_data'):
+            dim_count = len(selected_dims) if 'selected_dims' in dir() and selected_dims else 6
+            st.success(f"✅ 就绪: {len(st.session_state['eval_center_data'])} 条数据 | {dim_count} 个维度")
+        else:
+            st.info("请配置数据源并加载数据")
+    
+    # 评测执行区域
+    if start_eval:
+        if not st.session_state.get('eval_center_data'):
+            st.warning("请先加载评测数据")
+        else:
+            st.divider()
+            st.markdown("### 📊 评测结果")
+            
+            data = st.session_state['eval_center_data']
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # 🆕 v0.9.0: 新版评测调用
+            try:
+                # 定义进度回调
+                def update_progress(current, total, message):
+                    progress = min(current / total, 1.0) if total > 0 else 0
+                    progress_bar.progress(progress)
+                    status_text.text(f"{message} ({current}/{total})")
+                
+                # 获取评分标准 (如果没有则加载默认)
+                rubrics = st.session_state.get('rubrics_data', [])
+                if not rubrics:
+                    # 尝试从 config 加载
+                    try:
+                        with open('config/rubric.json', 'r', encoding='utf-8') as f:
+                            rubrics = json.load(f).get('rubrics', [])
+                    except:
+                        pass
+                
+                # 执行评测 - 新版返回 (results, summary)
+                results, summary = run_evaluation_task(
+                    data_list=data,
+                    rubrics=rubrics,
+                    progress_callback=update_progress
+                )
+                
+                status_text.text("✅ 评测完成!")
+                progress_bar.progress(1.0)
+                
+                # 保存结果到 session state
+                st.session_state['eval_center_last_results'] = results
+                st.session_state['eval_center_last_summary'] = summary
+
+            except Exception as e:
+                st.error(f"❌ 评测执行失败: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+
+    # 如果有结果，显示结果概览 (支持持久化显示)
+    if st.session_state.get('eval_center_last_results'):
+        results = st.session_state['eval_center_last_results']
+        summary = st.session_state.get('eval_center_last_summary', {})
+        
+        # 🆕 v0.9.0: 评测摘要卡片
+        st.markdown("### 📈 评测摘要")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("📊 总计", summary.get('total', len(results)))
+        with col2:
+            st.metric("✅ 成功", summary.get('success', 0))
+        with col3:
+            st.metric("⚠️ 跳过", summary.get('skipped', 0))
+        with col4:
+            st.metric("❌ 失败", summary.get('error', 0))
+        with col5:
+            avg = summary.get('avg_score', 0)
+            st.metric("⭐ 平均分", f"{avg:.1f}/5")
+        
+        # 耗时信息
+        duration = summary.get('duration_ms', 0)
+        if duration > 0:
+            st.caption(f"⏱️ 总耗时: {duration/1000:.1f}s")
+        
+        st.divider()
+        
+        # 🆕 v0.9.0: 按状态分类显示结果
+        st.markdown("### 📋 详细结果")
+        
+        # 状态筛选
+        status_filter = st.selectbox(
+            "筛选状态", 
+            ["全部", "✅ 成功", "⚠️ 跳过", "❌ 失败"],
+            key="eval_result_filter"
+        )
+        
+        filtered_results = results
+        if status_filter == "✅ 成功":
+            filtered_results = [r for r in results if r.get('status') == 'success']
+        elif status_filter == "⚠️ 跳过":
+            filtered_results = [r for r in results if r.get('status') == 'skipped']
+        elif status_filter == "❌ 失败":
+            filtered_results = [r for r in results if r.get('status') == 'error']
+        
+        # 显示列表
+        for r in filtered_results[:20]:  # 限制显示数量
+            status = r.get('status', 'unknown')
+            sess_id = r.get('session_id', 'unknown')
+            eval_type = r.get('eval_type', 'unknown')
+            avg_score = r.get('avg_score', 0)
+            duration_ms = r.get('duration_ms', 0)
+            error_msg = r.get('error_message', '')
+            
+            if status == 'success':
+                st.success(f"✅ **{sess_id}** | {eval_type} | {avg_score:.1f}/5 | {duration_ms}ms")
+            elif status == 'skipped':
+                st.warning(f"⚠️ **{sess_id}** | 跳过: {error_msg}")
+            else:
+                st.error(f"❌ **{sess_id}** | 失败: {error_msg}")
+        
+        if len(filtered_results) > 20:
+            st.caption(f"... 还有 {len(filtered_results) - 20} 条")
+        
+        st.divider()
+        
+        # 操作按钮
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+        with col_btn1:
+            if st.button("🔄 重新评测", use_container_width=True):
+                st.session_state['eval_center_last_results'] = None
+                st.session_state['eval_center_last_summary'] = None
+                st.rerun()
+        with col_btn2:
+            if st.button("📊 查看详情 (Trace)", type="primary", use_container_width=True):
+                st.session_state['current_page'] = 'data_explorer'
+                # 自动切换到对应的模式
+                success_results = [r for r in results if r.get('status') == 'success']
+                if success_results and 'eval_type' in success_results[0]:
+                    etype = success_results[0]['eval_type']
+                    if etype == 'single_turn':
+                        st.session_state['data_explorer_mode'] = "💬 单轮"
+                    elif etype == 'multi_turn':
+                        st.session_state['data_explorer_mode'] = "🗣️ 多轮"
+                    elif etype == 'agent':
+                        st.session_state['data_explorer_mode'] = "🤖 Agent"
+                st.rerun()
+
+# ==========================================
+# 🆕 v0.6.0: 追踪分析页面 (整合 Trace + 历史 + 低分)
+# ==========================================
+elif current_page == 'tracking':
+    if st.button("← 返回工作台"):
+        st.session_state['current_page'] = 'dashboard'
+        st.rerun()
+    
+    st.markdown('<h1 class="main-title">🔍 追踪分析</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">Trace 追踪 | 历史评测 | 低分分析</p>', unsafe_allow_html=True)
+    
+    # Tabs 整合
+    tab_trace, tab_history, tab_lowscore = st.tabs(["📋 Trace 追踪", "📚 历史评测", "🔴 低分分析"])
+    
+    with tab_trace:
+        # 筛选控件
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1:
+            session_filter = st.text_input("🔎 按 Session ID 筛选", "", placeholder="输入 session_id...", key="tracking_session")
+        with col2:
+            type_filter = st.selectbox("📋 评测类型", ["all", "single_turn", "multi_turn", "agent"], key="tracking_type")
+        with col3:
+            limit = st.slider("显示条数", 10, 100, 30, key="tracking_limit")
+        
+        try:
+            traces = TraceStore.list_traces(
+                session_id=session_filter if session_filter else None,
+                eval_type=type_filter if type_filter != "all" else None,
+                limit=limit
+            )
+            trace_count = TraceStore.get_trace_count()
+            st.markdown(f"### 📊 共 **{trace_count}** 条记录 (显示 {len(traces)} 条)")
+            
+            if not traces:
+                st.info("暂无 Trace 记录。运行评测后，记录将自动保存到这里。")
+            else:
+                for trace in traces:
+                    avg_score = trace.get('avg_score') or 0
+                    color = "🟢" if avg_score >= 4 else "🟡" if avg_score >= 3 else "🔴"
+                    created = trace.get('created_at', '')[:16] if trace.get('created_at') else ''
+                    title = f"{color} {trace['trace_id']} | {trace['session_id'][:15]}... | {avg_score:.1f}/5 | {trace['eval_type']} | {created}"
+                    
+                    with st.expander(title):
+                        detail = TraceStore.get_trace(trace['trace_id'])
+                        if detail:
+                            # 元信息表格
+                            st.markdown(f"""
+                            | 模型 | 耗时 | Tokens | 创建时间 |
+                            |------|------|--------|---------|
+                            | {detail.get('model', 'N/A')} | {detail.get('latency_ms', 0)}ms | {detail.get('tokens_used', 'N/A')} | {detail.get('created_at', '')[:19]} |
+                            """)
+                            
+                            # 输入输出
+                            io1, io2 = st.columns(2)
+                            with io1:
+                                st.markdown("**📥 输入**")
+                                st.json(detail.get('input_data', {}))
+                            with io2:
+                                st.markdown("**📤 输出**")
+                                st.json(detail.get('output_data', {}))
+                            
+                            # 评分详情 (含 reasoning)
+                            st.markdown("**⭐ 评分详情**")
+                            for score in detail.get('scores', []):
+                                val = score['value']
+                                icon = "🟢" if val >= 4 else "🟡" if val >= 3 else "🔴"
+                                turn_label = f"[Turn {score['turn_index']}]" if score.get('turn_index') is not None else ""
+                                st.markdown(f"{icon} **{score['name']}**: {val}/5 {turn_label}")
+                                if score.get('reasoning'):
+                                    st.caption(f"  → {score['reasoning']}")
+                            
+                            # Metadata 展开
+                            if detail.get('metadata') and detail['metadata'] != {}:
+                                with st.expander("📋 扩展元数据"):
+                                    st.json(detail['metadata'])
+        except Exception as e:
+            st.error(f"加载 Trace 数据失败: {str(e)}")
+    
+    with tab_history:
+        st.markdown("### 📚 历史评测记录")
+        try:
+            # 使用 TraceStore 获取历史记录
+            sessions = TraceStore.list_traces(limit=50)
+            if sessions:
+                # 按 session_id 分组
+                from collections import defaultdict
+                grouped = defaultdict(list)
+                for s in sessions:
+                    grouped[s['session_id']].append(s)
+                
+                for session_id, traces in list(grouped.items())[:20]:
+                    avg = sum(t.get('avg_score') or 0 for t in traces) / len(traces) if traces else 0
+                    with st.expander(f"📋 {session_id[:30]}... | {len(traces)} 条记录 | 平均: {avg:.1f}/5"):
+                        for t in traces:
+                            st.markdown(f"- **{t['trace_id']}** | {t['eval_type']} | {t.get('created_at', '')[:16]}")
+            else:
+                st.info("暂无历史评测记录")
+        except Exception as e:
+            st.warning(f"历史数据加载异常: {e}")
+    
+    with tab_lowscore:
+        st.markdown("### 🔴 低分记录分析")
+        
+        threshold = st.slider("低分阈值", 1.0, 5.0, 3.0, 0.5, key="lowscore_threshold")
+        
+        try:
+            low_scores = TraceStore.get_low_score_traces(threshold=threshold, limit=20)
+            
+            if low_scores:
+                st.markdown(f"共 **{len(low_scores)}** 条低分记录 (score < {threshold})")
+                
+                for item in low_scores:
+                    created = item.get('created_at', '')[:16] if item.get('created_at') else ''
+                    st.error(
+                        f"**{item['trace_id']}** | {item['session_id'][:15]}... | "
+                        f"**{item['dimension']}**: {item['score']}/5 | {created}"
+                    )
+                    if item.get('reasoning'):
+                        st.caption(f"  → {item['reasoning']}")
+            else:
+                st.success(f"🎉 暂无低分记录 (score < {threshold})，质量表现优秀！")
+        except Exception as e:
+            st.error(f"加载低分数据失败: {str(e)}")
+
+# ==========================================
+# 🆕 v0.7.0: 数据浏览页面 (按评测模式分类)
+# ==========================================
+elif current_page == 'data_explorer':
+    st.markdown('<h1 class="main-title">📜 数据浏览</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">按评测模式浏览和分析数据</p>', unsafe_allow_html=True)
+    
+    # 模式选择器
+    mode_options = ["📊 全部", "💬 单轮", "🗣️ 多轮", "🤖 Agent"]
+    if 'data_explorer_mode' not in st.session_state:
+        st.session_state['data_explorer_mode'] = "📊 全部"
+    
+    selected_mode = st.radio(
+        "选择模式",
+        mode_options,
+        horizontal=True,
+        index=mode_options.index(st.session_state.get('data_explorer_mode', "📊 全部")),
+        label_visibility="collapsed",
+        key="de_mode_selector"
+    )
+    st.session_state['data_explorer_mode'] = selected_mode
+    
+    st.divider()
+    
+    # 获取类型映射
+    mode_type_map = {
+        "💬 单轮": "single_turn",
+        "🗣️ 多轮": "multi_turn", 
+        "🤖 Agent": "agent",
+        "📊 全部": None
+    }
+    current_eval_type = mode_type_map.get(selected_mode)
+    
+    try:
+        # ========== 📊 全部模式 ==========
+        if selected_mode == "📊 全部":
+            # 统计卡片
+            stats_by_type = TraceStore.get_stats_by_type()
+            
+            st.markdown("### 📈 评测类型概览")
+            cols = st.columns(3)
+            
+            type_info = [
+                ("💬 单轮", "single_turn", "#3b82f6"),
+                ("🗣️ 多轮", "multi_turn", "#22c55e"),
+                ("🤖 Agent", "agent", "#f59e0b")
+            ]
+            
+            for i, (label, key, color) in enumerate(type_info):
+                with cols[i]:
+                    data = stats_by_type.get(key, {'count': 0, 'avg': 0, 'low_count': 0})
+                    st.markdown(f'''
+                    <div style="background:{color}20; border-left:4px solid {color}; padding:16px; border-radius:8px; margin-bottom:12px;">
+                        <div style="font-size:24px; font-weight:bold; color:{color};">{data['count']}</div>
+                        <div style="font-size:14px; color:#666;">{label}</div>
+                        <div style="font-size:12px; color:#999; margin-top:8px;">
+                            平均: {data['avg']}/5 | 低分: {data['low_count']}
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
+                    
+                    # 快捷入口按钮
+                    if st.button(f"查看详情", key=f"goto_{key}", use_container_width=True):
+                        st.session_state['data_explorer_mode'] = label
+                        st.rerun()
+            
+            st.divider()
+            
+            # 最近评测记录
+            st.markdown("### 📋 最近评测记录")
+            recent_traces = TraceStore.list_traces(limit=20)
+            
+            for trace in recent_traces:
+                avg_score = trace.get('avg_score') or 0
+                color = "🟢" if avg_score >= 4 else "🟡" if avg_score >= 3 else "🔴"
+                eval_type = trace.get('eval_type', 'multi_turn')
+                type_icon = "💬" if eval_type == "single_turn" else "🗣️" if eval_type == "multi_turn" else "🤖"
+                created = trace.get('created_at', '')[:16] if trace.get('created_at') else ''
+                
+                st.markdown(f"""
+                {color} **{trace['trace_id']}** | {type_icon} {eval_type} | {trace['session_id'][:20]}... | {avg_score:.1f}/5 | {created}
+                """)
+            
+            # 全局低分预警
+            st.divider()
+            st.markdown("### 🔴 全局低分预警")
+            low_scores = TraceStore.get_low_score_traces(threshold=3, limit=10)
+            if low_scores:
+                for item in low_scores:
+                    type_icon = "💬" if item['eval_type'] == "single_turn" else "🗣️" if item['eval_type'] == "multi_turn" else "🤖"
+                    st.error(f"{type_icon} **{item['trace_id']}** | {item['dimension']}: {item['score']}/5")
+                    if item.get('reasoning'):
+                        st.caption(f"→ {item['reasoning'][:80]}")
+            else:
+                st.success("🎉 暂无低分记录，质量表现优秀！")
+        
+        elif selected_mode in ["💬 单轮", "🗣️ 多轮", "🤖 Agent"]:
+            # 1. 顶部统计
+            stats = TraceStore.get_stats_by_type().get(current_eval_type, {'count': 0, 'avg': 0, 'low_count': 0})
+            
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 2])
+            c1.metric("📊 总记录", stats['count'])
+            c2.metric("⭐ 平均分", f"{stats['avg']}/5")
+            c3.metric("🔴 低分", stats['low_count'])
+            
+            # 2. 筛选与列表
+            with c4:
+                limit = st.selectbox("显示条数", [50, 100, 200], index=0, key="list_limit")
+            
+            # 获取数据
+            traces = TraceStore.get_traces_with_messages(eval_type=current_eval_type, limit=limit)
+            
+            if not traces:
+                st.info(f"暂无 {selected_mode} 评测记录。")
+            else:
+                # 准备 DataFrame 数据
+                import pandas as pd # Added import for pandas
+                df_data = []
+                for t in traces:
+                    created_str = t.get('created_at', '')
+                    # 尝试转为 datetime 对象以便 column_config 格式化
+                    try:
+                        created_dt = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
+                    except:
+                        created_dt = created_str
+
+                    # 提取更多信息 (Input/Output Preview)
+                    input_data = t.get('input_data', {})
+                    messages = input_data.get('messages', [])
+                    
+                    # 默认值
+                    input_preview = "N/A"
+                    output_preview = "N/A"
+                    
+                    # 提取性能指标 (Metrics)
+                    metrics = {}
+                    try:
+                        meta_raw = t.get('metadata')
+                        if meta_raw:
+                            if isinstance(meta_raw, str):
+                                meta = json.loads(meta_raw)
+                            else:
+                                meta = meta_raw
+                            
+                            # 兼容直接存储和嵌套 'metrics' 的情况
+                            metrics = meta.get('metrics', meta)
+                    except:
+                        pass
+                        
+                    latency_val = t.get('latency_ms', 0) or 0
+                    latency_display = f"{latency_val}ms"
+                    
+                    ttft_val = metrics.get('ttft_ms', 0)
+                    ttft_display = f"{ttft_val}ms" if ttft_val else "-"
+                    
+                    usage = metrics.get('token_usage') or {}
+                    total_tokens = usage.get('total_tokens', 0)
+                    tokens_display = total_tokens if total_tokens else "-"
+                    
+                    if t['eval_type'] == 'agent':
+                        input_preview = input_data.get('task', input_data.get('task_description', 'N/A'))
+                        # 尝试从 output_data 获取结果，或者 fallback 到 input_data
+                        output_data = t.get('output_data', {}) or {}
+                        # output_data 可能是 string (JSON) 或 dict
+                        if isinstance(output_data, str):
+                            try:
+                                output_data = json.loads(output_data)
+                            except:
+                                output_data = {}
+                                
+                        output_preview = str(output_data.get('result', output_data.get('output', input_data.get('final_output', 'N/A'))))
+                    else: # single/multi
+                        if messages:
+                            # Input: User Message
+                            user_msgs = [m['content'] for m in messages if m.get('role') == 'user']
+                            if user_msgs: 
+                                input_preview = user_msgs[0]
+                            
+                            # Output: Assistant Message
+                            asst_msgs = [m['content'] for m in messages if m.get('role') == 'assistant']
+                            if asst_msgs:
+                                output_preview = asst_msgs[-1]
+                    
+                    # 截断预览
+                    if len(input_preview) > 60: input_preview = input_preview[:60] + "..."
+                    if len(output_preview) > 60: output_preview = output_preview[:60] + "..."
+                    
+                    # 格式化 Token 显示
+                    tokens_display = "-"
+                    if total_tokens > 0:
+                        tokens_display = f"{total_tokens}" if total_tokens < 1000 else f"{total_tokens/1000:.1f}k"
+                    
+                    # Session ID Fallback (优化显示 'unknown')
+                    session_display = t['session_id']
+                    if not session_display or session_display == 'unknown':
+                        if t['eval_type'] == 'single_turn':
+                            session_display = "Single Turn Task"
+                        elif t['eval_type'] == 'agent':
+                            session_display = "Agent Task"
+                        else:
+                            session_display = "Session"
+                            
+                    df_data.append({
+                        "id": t['trace_id'],
+                        "name": session_display,
+                        "type": t['eval_type'],
+                        "score": t.get('avg_score', 0),
+                        "input": input_preview,
+                        "output": output_preview,
+                        "time": created_dt,
+                        "latency": latency_display,
+                        "ttft": ttft_display,
+                        "tokens": tokens_display,
+                        "raw_trace": t
+                    })
+                
+                df = pd.DataFrame(df_data)
+                
+                # 配置列显示 (仿 Langfuse)
+                st.markdown("### 📋 记录列表")
+                
+                st.dataframe(
+                    df,
+                    column_order=["time", "name", "type", "score", "latency", "ttft", "tokens", "input", "output"],
+                    column_config={
+                        "time": st.column_config.DatetimeColumn("Time", format="MM-DD HH:mm", width="small"),
+                        "name": st.column_config.TextColumn("Name / Session", width="medium"),
+                        "type": st.column_config.TextColumn("Type", width="small"),
+                        "score": st.column_config.ProgressColumn("Score", min_value=0, max_value=5, format="%.1f"),
+                        "latency": st.column_config.TextColumn("Latency", width="small"),
+                        "ttft": st.column_config.TextColumn("TTFT", width="small"),
+                        "tokens": st.column_config.TextColumn("Tokens", width="small"),
+                        "input": st.column_config.TextColumn("Input Preview", width="medium"),
+                        "output": st.column_config.TextColumn("Output Preview", width="medium"),
+                    },
+                    use_container_width=True,
+                    hide_index=True,
+                    height=300
+                )
+                
+                st.divider()
+                
+                # 3. 详情查看 (Master-Detail)
+                st.markdown(f"### 🔍 {selected_mode} 详情")
+                
+                # 生成选项列表
+                options = [t['raw_trace'] for t in df_data]
+                selected_trace = st.selectbox(
+                    "选择要查看的记录:", 
+                    options, 
+                    format_func=lambda x: f"[{x['created_at'][:16]}] {x['session_id']} (⭐{(x.get('avg_score') or 0):.1f})",
+                    key="trace_selector"
+                )
+                
+                if selected_trace:
+                    trace = selected_trace
+                    avg_score = trace.get('avg_score') or 0
+                    color = "🟢" if avg_score >= 4 else "🟡" if avg_score >= 3 else "🔴"
+                    
+                    # 渲染不同模式的详情
+                    # A. 单轮模式详情
+                    if current_eval_type == 'single_turn':
+                        st.markdown(f"#### {color} Session: {trace['session_id']}")
+                        
+                        # Input/Output
+                        input_data = trace.get('input_data', {})
+                        messages = input_data.get('messages', [])
+                        
+                        user_msg = next((m['content'] for m in messages if m.get('role') == 'user'), '')
+                        assistant_msg = next((m['content'] for m in messages if m.get('role') == 'assistant'), '')
+                        
+                        col_io1, col_io2 = st.columns(2)
+                        with col_io1:
+                            st.info(f"**User**: {user_msg}")
+                        with col_io2:
+                            st.success(f"**Assistant**: {assistant_msg}")
+                        
+                        # Scores
+                        st.markdown("#### ⭐ 维度评分")
+                        scores = trace.get('scores', [])
+                        if scores:
+                            cols = st.columns(min(len(scores), 4))
+                            for i, s in enumerate(scores):
+                                with cols[i % 4]:
+                                    val = s['value']
+                                    s_color = "🟢" if val >= 4 else "🟡" if val >= 3 else "🔴"
+                                    st.markdown(f"**{s['name']}**")
+                                    st.markdown(f"{s_color} {val}/5")
+                                    if s.get('reasoning'):
+                                        st.caption(f"{s['reasoning']}")
+                                        
+                    # B. 多轮模式详情
+                    elif current_eval_type == 'multi_turn':
+                        st.markdown(f"#### {color} Session: {trace['session_id']}")
+                        messages = trace.get('input_data', {}).get('messages', [])
+                        
+                        # 聊天气泡
+                        for i, msg in enumerate(messages):
+                            role = msg.get('role', 'unknown')
+                            content = msg.get('content', '')
+                            if role == 'user':
+                                st.markdown(f'''<div style="background:#f0f0f0;padding:10px;border-radius:10px;margin:5px 0;width:fit-content">👤 {content}</div>''', unsafe_allow_html=True)
+                            elif role == 'assistant':
+                                # 尝试找当前轮次的评分
+                                turn_idx = i // 2
+                                turn_scores = [s for s in trace.get('scores', []) if s.get('turn_index') == turn_idx]
+                                turn_avg = sum(s['value'] for s in turn_scores)/len(turn_scores) if turn_scores else 0
+                                score_badge = f"⭐{turn_avg:.1f}" if turn_scores else ""
+                                st.markdown(f'''<div style="background:#e3f2fd;padding:10px;border-radius:10px;margin:5px 0;margin-left:auto;width:fit-content;text-align:right">🤖 {content} <br><small>{score_badge}</small></div>''', unsafe_allow_html=True)
+                                
+                                # 显示维度详情
+                                if turn_scores:
+                                    with st.expander(f"Turn {turn_idx} 评分详情"):
+                                        for s in turn_scores:
+                                            st.write(f"- **{s['name']}**: {s['value']}/5 ({s.get('reasoning','')})")
+
+                    # C. Agent 模式详情
+                    elif current_eval_type == 'agent':
+                        input_data = trace.get('input_data', {})
+                        task_desc = input_data.get('task', input_data.get('task_description', '未知任务'))
+                        success = input_data.get('success', None)
+                        status_icon = "✅" if success else "❌" if success is False else "⏳"
+                        
+                        st.markdown(f"#### {status_icon} Task: {task_desc}")
+                        st.markdown(f"**最终输出**: {input_data.get('output', input_data.get('final_output', 'N/A'))}")
+                        
+                        # 工具链可视化
+                        tool_calls = input_data.get('tool_calls', [])
+                        if tool_calls:
+                            st.markdown("---")
+                            st.markdown(f"#### 🔧 工具调用链 ({len(tool_calls)} 次调用)")
+                            
+                            # 横向流程图
+                            tool_cols = st.columns(min(len(tool_calls), 5))
+                            for i, tool in enumerate(tool_calls[:5]):
+                                with tool_cols[i]:
+                                    tool_name = tool.get('name', 'unknown')
+                                    tool_success = tool.get('success', True)
+                                    t_color = "#22c55e" if tool_success else "#ef4444"
+                                    st.markdown(f'''
+                                    <div style="text-align:center; padding:12px; background:{t_color}20; border-radius:8px; border:2px solid {t_color};">
+                                        <div style="font-size:12px; color:#666;">Step {i+1}</div>
+                                        <div style="font-size:14px; font-weight:bold;">{tool_name[:12]}</div>
+                                    </div>
+                                    ''', unsafe_allow_html=True)
+                        # 决策推理链
+                        decisions = input_data.get('decisions', input_data.get('decision_steps', []))
+                        if decisions:
+                            st.markdown("---")
+                            st.markdown("#### 🧠 决策推理链")
+                            for i, dec in enumerate(decisions):
+                                thought = dec.get('thought', dec.get('reasoning', str(dec)))
+                                st.markdown(f"**Step {i+1}**: {thought}")
+                        
+                        # 评分详情
+                        st.markdown("---")
+                        st.markdown("#### ⭐ 评分详情")
+                        scores = trace.get('scores', [])
+                        for score in scores:
+                            val = score['value']
+                            s_color = "🟢" if val >= 4 else "🟡" if val >= 3 else "🔴"
+                            st.markdown(f"{s_color} **{score['name']}**: {val}/5")
+                            if score.get('reasoning'):
+                                st.caption(f"→ {score['reasoning']}")
+    
+    except Exception as e:
+        st.error(f"加载数据失败: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+
+# ==========================================
+# 🆕 v0.6.0: 系统设置页面 (整合 rubric + prompt)
+# ==========================================
+elif current_page == 'settings':
+    st.markdown('<h1 class="main-title">⚙️ 系统设置</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">评分维度 | Prompt 模板</p>', unsafe_allow_html=True)
+    
+    tab_rubric, tab_prompt = st.tabs(["🛠️ 评分维度", "🎨 Prompt 模板"])
+    
+    with tab_rubric:
+        st.markdown("### 🛠️ 评分维度配置")
+        
+        rubric_path = st.text_input("配置文件路径", "config/rubric.json", key="settings_rubric_path")
+        
+        if st.button("📂 加载配置", key="settings_load_rubric"):
+            st.session_state['rubric_data'] = load_json_path(rubric_path)
+            st.rerun()
+        
+        rubric_data = st.session_state.get('rubric_data') or load_json_path(rubric_path)
+        
+        if rubric_data:
+            if isinstance(rubric_data, dict) and 'rubrics' in rubric_data:
+                dims = rubric_data['rubrics']
+            elif isinstance(rubric_data, list):
+                dims = rubric_data
+            else:
+                dims = []
+            
+            st.markdown(f"**共 {len(dims)} 个评测维度:**")
+            for dim in dims:
+                name = dim.get('name', 'unknown') if isinstance(dim, dict) else str(dim)
+                desc = dim.get('description', '')[:50] if isinstance(dim, dict) else ''
+                with st.expander(f"📌 {name}"):
+                    st.markdown(f"**描述**: {desc}...")
+                    if isinstance(dim, dict):
+                        st.json(dim.get('criteria', {}))
+        else:
+            st.warning("未加载配置文件")
+    
+    with tab_prompt:
+        st.markdown("### 🎨 Prompt 模板")
+        
+        st.markdown("**评测 Prompt 预览:**")
+        st.code("""
+你是一个专业的对话质量评测专家。请对以下对话进行评分。
+
+评分维度:
+1. clarity (清晰度): 1-5分
+2. proactivity (主动性): 1-5分
+3. accuracy (准确性): 1-5分
+...
+
+输出格式: JSON
+{"scores": {"clarity": 4, ...}, "reasoning": "..."}
+        """, language="text")
+        
+        st.info("Prompt 模板编辑功能开发中...")
 
 # ==========================================
 # 透明演示横幅（底部固定）

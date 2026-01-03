@@ -151,7 +151,7 @@ if __name__ == "__main__":
     # 测试代码
     import json
     
-    parser = DifyWorkflowParser(workflow_path="Dify.yml")
+    parser = DifyWorkflowParser(workflow_path="config/Dify.yml")
     
     print("=== 工作流摘要 ===")
     summary = parser.get_workflow_summary()

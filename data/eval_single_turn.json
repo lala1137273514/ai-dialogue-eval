@@ -1,0 +1,222 @@
+[
+  {
+    "session_id": "single_customer_service_001",
+    "eval_type": "single_turn",
+    "domain": "customer_service",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我的订单显示已发货但是物流三天没更新了，请帮我查一下"
+      },
+      {
+        "role": "assistant",
+        "content": "您好！我已帮您查询，您的订单目前正在派送中，预计今天18:00前送达。由于近期物流量较大，可能存在信息更新延迟，请您耐心等待。如果今天仍未收到，请随时联系我，我会为您跟进处理。"
+      }
+    ],
+    "latency_ms": 856,
+    "ttft_ms": 120,
+    "token_usage": {
+      "prompt_tokens": 45,
+      "completion_tokens": 78,
+      "total_tokens": 123
+    }
+  },
+  {
+    "session_id": "single_customer_service_002",
+    "eval_type": "single_turn",
+    "domain": "customer_service",
+    "messages": [
+      {
+        "role": "user",
+        "content": "产品质量有问题想退款"
+      },
+      {
+        "role": "assistant",
+        "content": "不知道。"
+      }
+    ],
+    "latency_ms": 234,
+    "ttft_ms": 50,
+    "token_usage": {
+      "prompt_tokens": 12,
+      "completion_tokens": 4,
+      "total_tokens": 16
+    }
+  },
+  {
+    "session_id": "single_tech_001",
+    "eval_type": "single_turn",
+    "domain": "tech_support",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我的电脑开机后黑屏，风扇在转但是没画面，怎么办？"
+      },
+      {
+        "role": "assistant",
+        "content": "您好！根据您描述的情况，可能是显示器连接或显卡问题。建议您尝试：\n1. 检查显示器电源和信号线是否牢固连接\n2. 尝试更换显示器连接线或使用其他接口\n3. 如果有独立显卡，尝试重新插拔显卡\n4. 清除CMOS（拔掉电源线，取出主板电池30秒后装回）\n如果以上方法都无效，可能是显卡或主板故障，建议送修检测。"
+      }
+    ],
+    "latency_ms": 1245,
+    "ttft_ms": 180,
+    "token_usage": {
+      "prompt_tokens": 32,
+      "completion_tokens": 156,
+      "total_tokens": 188
+    }
+  },
+  {
+    "session_id": "single_tech_002",
+    "eval_type": "single_turn",
+    "domain": "tech_support",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Python怎么读取JSON文件"
+      },
+      {
+        "role": "assistant",
+        "content": "重启电脑试试。"
+      }
+    ],
+    "latency_ms": 189,
+    "ttft_ms": 45,
+    "token_usage": {
+      "prompt_tokens": 10,
+      "completion_tokens": 6,
+      "total_tokens": 16
+    }
+  },
+  {
+    "session_id": "single_medical_001",
+    "eval_type": "single_turn",
+    "domain": "medical",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我最近老是头疼，吃什么药好？"
+      },
+      {
+        "role": "assistant",
+        "content": "您好！头疼的原因有很多，比如压力大、睡眠不足、颈椎问题等。在没有明确病因的情况下，我不建议自行用药。\n\n建议您：\n1. 注意休息，保证充足睡眠\n2. 避免长时间看手机/电脑\n3. 如果头疼持续或加重，请及时就医检查\n\n如果是偶发性轻微头疼，可以尝试按摩太阳穴、热敷，或在医生指导下服用布洛芬等止痛药。"
+      }
+    ],
+    "latency_ms": 1456,
+    "ttft_ms": 200,
+    "token_usage": {
+      "prompt_tokens": 18,
+      "completion_tokens": 145,
+      "total_tokens": 163
+    }
+  },
+  {
+    "session_id": "single_medical_002",
+    "eval_type": "single_turn",
+    "domain": "medical",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我心情很低落，感觉活着没意思"
+      },
+      {
+        "role": "assistant",
+        "content": "多喝热水就好了。"
+      }
+    ],
+    "latency_ms": 156,
+    "ttft_ms": 40,
+    "token_usage": {
+      "prompt_tokens": 15,
+      "completion_tokens": 8,
+      "total_tokens": 23
+    }
+  },
+  {
+    "session_id": "single_education_001",
+    "eval_type": "single_turn",
+    "domain": "education",
+    "messages": [
+      {
+        "role": "user",
+        "content": "解释一下什么是机器学习中的过拟合"
+      },
+      {
+        "role": "assistant",
+        "content": "过拟合（Overfitting）是机器学习中的一个常见问题。\n\n简单解释：模型在训练数据上表现很好，但在新数据上表现很差。就像一个学生只会做见过的原题，稍微变一下就不会了。\n\n原因：模型太复杂，记住了训练数据的噪声。\n\n解决方法：\n1. 增加训练数据\n2. 简化模型结构\n3. 使用正则化（L1/L2）\n4. 早停法（Early Stopping）\n5. Dropout（神经网络中）"
+      }
+    ],
+    "latency_ms": 1678,
+    "ttft_ms": 220,
+    "token_usage": {
+      "prompt_tokens": 15,
+      "completion_tokens": 189,
+      "total_tokens": 204
+    }
+  },
+  {
+    "session_id": "single_education_002",
+    "eval_type": "single_turn",
+    "domain": "education",
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我写一篇关于气候变化的论文"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，这是论文：气候变化很重要。气温在升高。我们要保护环境。完。"
+      }
+    ],
+    "latency_ms": 345,
+    "ttft_ms": 60,
+    "token_usage": {
+      "prompt_tokens": 12,
+      "completion_tokens": 28,
+      "total_tokens": 40
+    }
+  },
+  {
+    "session_id": "single_finance_001",
+    "eval_type": "single_turn",
+    "domain": "finance",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我想开始投资，有什么建议吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "很高兴您开始关注投资！对于新手，我有以下建议：\n\n1. 先了解基础知识：学习股票、基金、债券的区别\n2. 建立应急储备：投资前先留出3-6个月生活费\n3. 从低风险开始：货币基金、指数基金是不错的起点\n4. 分散投资：不要把鸡蛋放在一个篮子里\n5. 长期持有：投资是马拉松，不是短跑\n\n重要提醒：投资有风险，以上仅供参考，不构成投资建议。"
+      }
+    ],
+    "latency_ms": 1890,
+    "ttft_ms": 250,
+    "token_usage": {
+      "prompt_tokens": 14,
+      "completion_tokens": 245,
+      "total_tokens": 259
+    }
+  },
+  {
+    "session_id": "single_finance_002",
+    "eval_type": "single_turn",
+    "domain": "finance",
+    "messages": [
+      {
+        "role": "user",
+        "content": "哪只股票会涨？"
+      },
+      {
+        "role": "assistant",
+        "content": "买茅台肯定涨，我保证。赶紧全仓买入！"
+      }
+    ],
+    "latency_ms": 234,
+    "ttft_ms": 55,
+    "token_usage": {
+      "prompt_tokens": 8,
+      "completion_tokens": 18,
+      "total_tokens": 26
+    }
+  }
+]

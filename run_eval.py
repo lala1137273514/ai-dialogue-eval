@@ -9,9 +9,11 @@
 
 import json
 import re
+import time
 from typing import List, Dict, Any, Callable, Optional, Generator
 from agent import RealAgent
 from workflow_parser import DifyWorkflowParser
+from trace_store import TraceStore
 
 
 # ==========================================
@@ -325,9 +327,28 @@ def run_log_evaluation(logs: List[Dict],
         domain = session.get('domain', 'general')
         messages = session.get('messages', [])
         
+        # 提取 Mock 性能数据
+        latency_ms = session.get('latency_ms')
+        metadata = {
+            'ttft_ms': session.get('ttft_ms'),
+            'token_usage': session.get('token_usage')
+        }
+
+        # 🆕 v0.2.0: 创建 Trace 记录
+        start_time = time.time()
+        trace_id = TraceStore.create_trace(
+            session_id=session_id,
+            eval_type=session.get('eval_type', 'multi_turn'),
+            input_data={'messages': messages, 'domain': domain},
+            model=agent.model_name,
+            latency_ms=latency_ms,
+            metadata=metadata
+        )
+        
         session_results = {
             "session_id": session_id,
-            "evaluations": [],      # 每条 turn 一个评测结果
+            "trace_id": trace_id,  # 🆕 添加 trace_id
+            "evaluations": [],
             "low_score_analyses": []
         }
         
@@ -383,7 +404,35 @@ def run_log_evaluation(logs: List[Dict],
                     })
                 
                 session_results["evaluations"].append(eval_item)
+                
+                # 🆕 v0.2.0: 记录每个维度的评分到 Trace
+                for dim_name, dim_score in eval_res['scores'].items():
+                    TraceStore.add_score(
+                        trace_id=trace_id,
+                        name=dim_name,
+                        value=dim_score,
+                        reasoning=eval_res.get('overall_analysis', '')[:100],
+                        turn_index=idx
+                    )
+                
                 current_step += 1
+        
+        # 🆕 v0.2.0: 更新 Trace 输出和耗时
+        latency_ms = int((time.time() - start_time) * 1000)
+        TraceStore.update_trace(
+            trace_id=trace_id,
+            output_data={
+                'evaluations': session_results['evaluations'],
+                'low_score_count': len(session_results['low_score_analyses'])
+            },
+            latency_ms=latency_ms
+        )
+        
+        # 生成会话级综合评分
+        summary = generate_session_summary(session_results)
+        session_results.update(summary)
+        # 兼容 app.py 显示 (frontend uses 'avg_score')
+        session_results['avg_score'] = summary['overall_score']
         
         results.append(session_results)
     
@@ -615,14 +664,14 @@ def generate_json_report(results: List[Dict], rubrics: List[Dict] = None) -> Dic
 if __name__ == "__main__":
     # 测试代码
     try:
-        with open('test_cases1.json', 'r', encoding='utf-8') as f:
+        with open('data/test_cases1.json', 'r', encoding='utf-8') as f:
             logs = json.load(f)
-        with open('rubric.json', 'r', encoding='utf-8') as f:
+        with open('config/rubric.json', 'r', encoding='utf-8') as f:
             config = json.load(f)
         
         workflow = None
         try:
-            workflow = DifyWorkflowParser(workflow_path='Dify.yml')
+            workflow = DifyWorkflowParser(workflow_path='config/Dify.yml')
             print("✅ 工作流已加载")
         except:
             print("⚠️ 未找到工作流文件")

@@ -1,17 +1,19 @@
-# AI 对话评测系统 Pro
+# AI 对话评测系统 Pro (v0.9.0)
 
-> 基于 LLM-as-a-Judge 的多轮对话质量评测平台，支持工作流节点溯源与智能诊断
+> 基于 LLM-as-a-Judge 的全链路 AI 质量评测平台，支持单轮、多轮及 Agent 评测。
 
 ## ✨ 核心特性
 
 | 特性 | 说明 |
 |------|------|
-| 🎯 **合并评测** | 每条回复只做 1 次 LLM 调用，一次性输出 6 维度评分 |
+| 🌐 **全模式支持** | 统一支持 **单轮对话** (Single Turn)、**多轮对话** (Multi Turn) 和 **Agent** 评测 |
+| 🔄 **统一调度器** | 全新 `eval_dispatcher` 统一入口，自动路由不同评测类型，结构化结果输出 |
+| 🕵️ **Trace 追踪** | 引入 Langfuse 风格的 Trace 机制，完整记录输入、输出、耗时与 Token 消耗 |
+| 📊 **Dashboard 2.0** | 全新可视化看板，包含**组合趋势图**、**性能散点图**与**能力热力图** |
+| 🎯 **合并评测** | 智能调度器自动合并 LLM 调用，一次性输出多维度评分 |
 | ⚖️ **综合分算法** | 最低分惩罚机制，防止低分维度被平均分掩盖 |
-| 🔍 **深度分析** | 低分回复自动触发根因分析 + 工作流节点溯源 |
-| 📊 **可视化仪表盘** | 雷达图、评分分布、会话对比 |
-| 📚 **历史记录** | SQLite 持久化存储，支持增删改查 |
-| 📥 **报告导出** | Markdown / JSON 完整评测报告 |
+| 📚 **持久化存储** | 本地 SQLite `traces.db` 存储所有评测记录与评分 |
+| 📥 **报告导出** | 支持导出 Markdown / JSON 完整评测报告 |
 
 ## 🚀 快速开始
 
@@ -34,148 +36,84 @@ http://localhost:8501
 ## 📂 项目结构
 
 ```
-ai-dialogue-eval-main/
-├── app.py              # Streamlit 主应用
-├── run_eval.py         # 评测执行引擎
-├── database.py         # SQLite 数据库模块
-├── agent.py            # LLM 调用封装
-├── workflow_parser.py  # Dify 工作流解析器
-├── prompt_optimizer.py # Prompt 优化工具
-├── rubric.json         # 评分标准配置
-├── test_cases1.json    # 示例对话日志
-├── Dify.yml            # 示例工作流配置
-└── eval_results.db     # SQLite 数据库文件
+ai-dialogue-eval/
+├── app.py                  # Streamlit 主应用 (UI)
+├── eval_dispatcher.py      # 统一评测调度器 (v0.9.0 核心)
+├── run_eval.py             # 多轮/单轮评测引擎
+├── agent_eval.py           # Agent 评测引擎
+├── trace_store.py          # Trace 存储与可视化数据层
+├── database.py             # 基础数据库模块
+├── agent.py                # LLM 调用封装
+├── unified_eval.py         # 统一评测入口
+├── api_server.py           # HTTP API 服务 (Flask)
+├── workflow_parser.py      # Dify 工作流解析器
+├── prompt_optimizer.py     # Prompt 优化工具
+├── populate_test_data.py   # 模拟数据生成器
+├── simulation_data_gen.py  # Bad Case 生成器
+├── config/
+│   └── rubric.json         # 评分标准配置
+└── data/
+    ├── eval_single_turn.json   # 单轮评测数据
+    ├── eval_multi_turn.json    # 多轮评测数据
+    └── eval_agent.json         # Agent 评测数据
 ```
 
-## 📋 功能模块
+## 📋 主要功能模块
 
-### 1. 📊 工作台
-- 数据源加载状态
-- 快捷操作入口
-- 系统概览
+### 1. 📊 智能工作台 (Dashboard 2.0)
+- **评测趋势与质量波动**: 组合图展示评测数量与平均分趋势。
+- **性能与质量关联**: 散点图分析 Latency/Tokens 与分数的关联，发现"慢且差"的异常。
+- **维度能力矩阵**: 热力图展示不同模式下的能力强弱分布。
+- **模式切换器**: 一键切换全部/单轮/多轮/Agent 视图。
 
-### 2. 📜 日志回放
-- 三栏布局：会话列表 | 对话内容 | 评测结果
-- 对话消息与评分联动
-- 实时查看各维度得分
+### 2. 🚀 评测中心
+- **统一调度器**: 自动识别数据类型 (单轮/多轮/Agent) 并路由到对应引擎。
+- **结构化结果**: 返回 `EvalResultDTO` 包含状态、分数、耗时、trace_id 等。
+- **进度反馈**: 实时进度条 + 状态文本展示评测进度。
+- **错误处理**: 详细的错误分类 (success/error/skipped) 及原因说明。
 
-### 3. 🚀 智能评测
-- **Phase 1**: 合并快速评测（1次调用 = 6维度分数）
-- **Phase 2**: 低分深度分析（根因 + 溯源 + 建议）
-- 可配置低分阈值（1-4 分）
-- 自动保存到 SQLite
+### 3. 🔍 数据浏览 (Data Explorer)
+- **多模式列表**: 支持按 Agent/Single/Multi 筛选。
+- **详细信息**: 查看 Latency, TTFT, Tokens 等性能指标。
+- **深度详情**: 
+    - Agent: 完整的工具调用链与思维链展示。
+    - Chat: 气泡式对话还原。
 
-### 4. 🔍 低分分析
-- 问题回复聚合展示
-- 根因分析 + 修改建议
-- 工作流节点溯源
-
-### 5. 📚 历史评测
-- 历史批次列表
-- 关联文件查看（日志/工作流/评分标准）
-- 批次详情与 Turn 级评分
-- 删除功能
-
-### 6. 🛠️ 评分标准配置
-- 在线编辑 rubric.json
-- 维度权重调整
-
-### 7. 💡 Prompt 工坊
-- Prompt 生成与优化
-- 流式输出
-
-### 8. 🎬 演示教程
-- 交互式功能引导
-- 7 步快速了解系统
-- 支持自动播放（3秒/步）
-- 随时可从侧边栏启动
-
-## 📐 评分维度
-
-| 维度 | 说明 |
-|------|------|
-| clarity_sentence_structure | 表达清晰度 |
-| proactivity_interaction | 主动引导能力 |
-| content_benefits | 内容价值呈现 |
-| persona_authority | 专业权威感 |
-| accuracy_truthfulness | 信息准确性 |
-| tone_empathy | 语气共情度 |
-
-## 📊 综合分算法
-
-```
-综合分 = min(平均分, 最低分 + 1.5)
-```
-
-**示例**：
-- 各维度 [1, 5, 5, 5, 5, 5] → 平均 4.33，综合分 **2.5**（触发深度分析）
-- 各维度 [4, 4, 4, 4, 4, 4] → 平均 4.0，综合分 **4.0**（正常）
-
-## 📁 数据格式
-
-### 对话日志 (JSON)
-
-```json
-[
-  {
-    "session_id": "consult_001",
-    "domain": "医美咨询",
-    "messages": [
-      {"role": "user", "content": "想了解瘦脸针"},
-      {"role": "assistant", "content": "您好！瘦脸针是..."}
-    ]
-  }
-]
-```
-
-### 评分标准 (rubric.json)
-
-```json
-{
-  "rubrics": [
-    {
-      "name": "clarity_sentence_structure",
-      "description": "表达清晰度评估",
-      "criteria": {"5": "完美", "4": "良好", "3": "一般", "2": "较差", "1": "严重问题"},
-      "low_score_checklist": ["语句不通顺", "表达含糊"]
-    }
-  ],
-  "low_score_threshold": 3
-}
-```
-
-## 🔧 环境变量
-
-```bash
-OPENAI_API_KEY=your_api_key
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4
-```
+### 4. ⚙️ 系统设置
+- **评分标准配置**: 在线编辑 rubric.json。
+- **Prompt 工坊**: Prompt 生成与优化。
 
 ## 📝 更新日志
 
-### v3.1 (2024-12-19)
-- 🎬 演示教程：交互式功能引导，7步快速上手
-- 🔄 自动播放：勾选后每3秒自动切换下一步
-- 🎯 侧边栏控制：演示进度和按钮统一显示
+### v0.9.0 (2026-01-03)
+- **Unified Dispatcher**: 全新 `eval_dispatcher.py` 统一评测调度。
+  - 统一入口 `run_evaluation_task()` 自动路由评测类型。
+  - 结构化 DTO: `EvalResultDTO`, `EvalSummaryDTO`。
+  - 输入验证 + 数据标准化 (`validate_input`, `normalize_data`)。
+  - 完整错误处理与状态分类 (success/error/skipped)。
+- **Eval Center UI**: 评测中心 UI 重构。
+  - 评测摘要卡片 (总计/成功/跳过/失败/平均分)。
+  - 按状态筛选结果列表。
+  - 一键跳转 Trace 详情。
 
-### v3.0 (2024-12-18)
-- ✨ 合并评测：每条回复 1 次调用输出 6 维度分数
-- ⚖️ 综合分算法：最低分惩罚机制
-- 📚 历史评测：SQLite 持久化 + 增删改查
-- 🔧 低分阈值可选 1-4
+### v0.8.2 (2026-01-03)
+- **Vis Upgrade**: Dashboard 升级为 Plotly 高级交互图表 (Combo/Scatter/Heatmap)。
+- **Performance**: Trace 列表增加 Latency/Tokens 指标展示。
+- **Fix**: 修复 TraceStore 数据读取稳定性问题。
 
-### v2.0
-- 两阶段评测：快速打分 + 深度分析
-- 工作流节点溯源
-- 报告导出（Markdown / JSON）
-- 日志回放增强
+### v0.8.0 (2026-01-02)
+- **Unified Eval**: 引入 `eval_dispatcher` 统一调度单轮、多轮、Agent 评测。
+- **Trace System**: 实现 `TraceStore` 本地存储，替代 JSON 文件。
+- **Simulation**: 新增 `populate_test_data.py` 生成全量模拟数据。
 
-### v1.0
-- 基础评测功能
-- 多维度打分
-- 可视化仪表盘
+### v0.7.0 (2026-01-01)
+- **Data Explorer**: 数据浏览深度优化，Master-Detail 布局。
+- **Rich Table**: 仿 Langfuse 的丰富列表视图。
 
----
+### v0.6.0 (2025-12-31)
+- **UI Refactor**: 4 入口导航结构 (首页看板/评测中心/数据浏览/系统设置)。
+- **Dashboard Mode**: 模式切换器 (全部/单轮/多轮/Agent)。
 
-**Powered by LLM-as-a-Judge** | 支持工作流节点溯源 | AI 对话评测系统 Pro v3.0
+### v3.1 (Legacy)
+- 演示教程与自动播放功能。
+- 合并评测 + SQLite 持久化。

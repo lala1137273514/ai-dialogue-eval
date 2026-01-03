@@ -1,0 +1,907 @@
+[
+  {
+    "session_id": "sim_single_bad_01",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 1 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "这不关我的事。"
+      }
+    ],
+    "latency_ms": 482,
+    "ttft_ms": 125,
+    "token_usage": {
+      "prompt_tokens": 112,
+      "completion_tokens": 165,
+      "total_tokens": 277
+    }
+  },
+  {
+    "session_id": "sim_single_bad_02",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 2 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "API调用失败"
+      }
+    ],
+    "latency_ms": 2198,
+    "ttft_ms": 999,
+    "token_usage": {
+      "prompt_tokens": 303,
+      "completion_tokens": 154,
+      "total_tokens": 457
+    }
+  },
+  {
+    "session_id": "sim_single_bad_03",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 3 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "请你自己去查。"
+      }
+    ],
+    "latency_ms": 1162,
+    "ttft_ms": 264,
+    "token_usage": {
+      "prompt_tokens": 168,
+      "completion_tokens": 157,
+      "total_tokens": 325
+    }
+  },
+  {
+    "session_id": "sim_single_bad_04",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 4 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "我不理解你的意思"
+      }
+    ],
+    "latency_ms": 2786,
+    "ttft_ms": 333,
+    "token_usage": {
+      "prompt_tokens": 231,
+      "completion_tokens": 78,
+      "total_tokens": 309
+    }
+  },
+  {
+    "session_id": "sim_single_bad_05",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 5 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "错误的答案"
+      }
+    ],
+    "latency_ms": 2925,
+    "ttft_ms": 834,
+    "token_usage": {
+      "prompt_tokens": 137,
+      "completion_tokens": 169,
+      "total_tokens": 306
+    }
+  },
+  {
+    "session_id": "sim_single_bad_06",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 6 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "我不知道。"
+      }
+    ],
+    "latency_ms": 2864,
+    "ttft_ms": 857,
+    "token_usage": {
+      "prompt_tokens": 341,
+      "completion_tokens": 129,
+      "total_tokens": 470
+    }
+  },
+  {
+    "session_id": "sim_single_bad_07",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 7 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "重复内容 重复内容 重复内容 重复内容 重复内容 重复内容 重复内容 重复内容 重复内容 重复内容 "
+      }
+    ],
+    "latency_ms": 2138,
+    "ttft_ms": 346,
+    "token_usage": {
+      "prompt_tokens": 425,
+      "completion_tokens": 163,
+      "total_tokens": 588
+    }
+  },
+  {
+    "session_id": "sim_single_bad_08",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 8 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "User: Hello\nAssistant: Hi"
+      }
+    ],
+    "latency_ms": 2175,
+    "ttft_ms": 377,
+    "token_usage": {
+      "prompt_tokens": 354,
+      "completion_tokens": 91,
+      "total_tokens": 445
+    }
+  },
+  {
+    "session_id": "sim_single_bad_09",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 9 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "请你自己去查。"
+      }
+    ],
+    "latency_ms": 783,
+    "ttft_ms": 73,
+    "token_usage": {
+      "prompt_tokens": 496,
+      "completion_tokens": 145,
+      "total_tokens": 641
+    }
+  },
+  {
+    "session_id": "sim_single_bad_10",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 10 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "错误的答案"
+      }
+    ],
+    "latency_ms": 1263,
+    "ttft_ms": 140,
+    "token_usage": {
+      "prompt_tokens": 170,
+      "completion_tokens": 62,
+      "total_tokens": 232
+    }
+  },
+  {
+    "session_id": "sim_single_bad_11",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 11 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "..."
+      }
+    ],
+    "latency_ms": 2211,
+    "ttft_ms": 458,
+    "token_usage": {
+      "prompt_tokens": 312,
+      "completion_tokens": 139,
+      "total_tokens": 451
+    }
+  },
+  {
+    "session_id": "sim_single_bad_12",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 12 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "User: Hello\nAssistant: Hi"
+      }
+    ],
+    "latency_ms": 1562,
+    "ttft_ms": 200,
+    "token_usage": {
+      "prompt_tokens": 100,
+      "completion_tokens": 186,
+      "total_tokens": 286
+    }
+  },
+  {
+    "session_id": "sim_single_bad_13",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 13 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "系统错误"
+      }
+    ],
+    "latency_ms": 2394,
+    "ttft_ms": 904,
+    "token_usage": {
+      "prompt_tokens": 450,
+      "completion_tokens": 169,
+      "total_tokens": 619
+    }
+  },
+  {
+    "session_id": "sim_single_bad_14",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 14 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "系统错误"
+      }
+    ],
+    "latency_ms": 2039,
+    "ttft_ms": 341,
+    "token_usage": {
+      "prompt_tokens": 98,
+      "completion_tokens": 79,
+      "total_tokens": 177
+    }
+  },
+  {
+    "session_id": "sim_single_bad_15",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 15 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "User: Hello\nAssistant: Hi"
+      }
+    ],
+    "latency_ms": 1450,
+    "ttft_ms": 170,
+    "token_usage": {
+      "prompt_tokens": 304,
+      "completion_tokens": 132,
+      "total_tokens": 436
+    }
+  },
+  {
+    "session_id": "sim_single_bad_16",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 16 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "错误的答案"
+      }
+    ],
+    "latency_ms": 1057,
+    "ttft_ms": 220,
+    "token_usage": {
+      "prompt_tokens": 445,
+      "completion_tokens": 87,
+      "total_tokens": 532
+    }
+  },
+  {
+    "session_id": "sim_single_bad_17",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 17 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "..."
+      }
+    ],
+    "latency_ms": 1947,
+    "ttft_ms": 653,
+    "token_usage": {
+      "prompt_tokens": 212,
+      "completion_tokens": 115,
+      "total_tokens": 327
+    }
+  },
+  {
+    "session_id": "sim_single_bad_18",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 18 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "..."
+      }
+    ],
+    "latency_ms": 1218,
+    "ttft_ms": 302,
+    "token_usage": {
+      "prompt_tokens": 316,
+      "completion_tokens": 138,
+      "total_tokens": 454
+    }
+  },
+  {
+    "session_id": "sim_single_bad_19",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 19 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "我不知道。"
+      }
+    ],
+    "latency_ms": 2651,
+    "ttft_ms": 670,
+    "token_usage": {
+      "prompt_tokens": 447,
+      "completion_tokens": 42,
+      "total_tokens": 489
+    }
+  },
+  {
+    "session_id": "sim_single_bad_20",
+    "eval_type": "single_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请帮我查询编号为 20 的订单状态，并告诉我预计送达时间。"
+      },
+      {
+        "role": "assistant",
+        "content": "错误的答案"
+      }
+    ],
+    "latency_ms": 474,
+    "ttft_ms": 121,
+    "token_usage": {
+      "prompt_tokens": 75,
+      "completion_tokens": 117,
+      "total_tokens": 192
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_01",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #1，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 死循环 问题。"
+      }
+    ],
+    "final_output": "Error: Max recursion depth exceeded",
+    "success": false,
+    "latency_ms": 2358,
+    "ttft_ms": 969,
+    "token_usage": {
+      "prompt_tokens": 313,
+      "completion_tokens": 111,
+      "total_tokens": 424
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_02",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #2，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 无工具调用 问题。"
+      }
+    ],
+    "final_output": "我无法完成此任务，因为没有相关工具。",
+    "success": false,
+    "latency_ms": 871,
+    "ttft_ms": 192,
+    "token_usage": {
+      "prompt_tokens": 347,
+      "completion_tokens": 44,
+      "total_tokens": 391
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_03",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #3，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 任务未完成 问题。"
+      }
+    ],
+    "final_output": "抱歉，我尝试了但失败了。",
+    "success": false,
+    "latency_ms": 2146,
+    "ttft_ms": 955,
+    "token_usage": {
+      "prompt_tokens": 138,
+      "completion_tokens": 92,
+      "total_tokens": 230
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_04",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #4，需要多步推理和工具调用。",
+    "tool_calls": [
+      {
+        "name": "search_db",
+        "args": {
+          "invalid": "key"
+        },
+        "success": false
+      }
+    ],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 工具参数错误 问题。"
+      }
+    ],
+    "final_output": "Error: Invalid argument 'date'",
+    "success": false,
+    "latency_ms": 1414,
+    "ttft_ms": 152,
+    "token_usage": {
+      "prompt_tokens": 104,
+      "completion_tokens": 125,
+      "total_tokens": 229
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_05",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #5，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 死循环 问题。"
+      }
+    ],
+    "final_output": "Error: Max recursion depth exceeded",
+    "success": false,
+    "latency_ms": 2443,
+    "ttft_ms": 773,
+    "token_usage": {
+      "prompt_tokens": 239,
+      "completion_tokens": 100,
+      "total_tokens": 339
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_06",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #6，需要多步推理和工具调用。",
+    "tool_calls": [
+      {
+        "name": "search_db",
+        "args": {
+          "invalid": "key"
+        },
+        "success": false
+      }
+    ],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 工具参数错误 问题。"
+      }
+    ],
+    "final_output": "Error: Invalid argument 'date'",
+    "success": false,
+    "latency_ms": 2380,
+    "ttft_ms": 970,
+    "token_usage": {
+      "prompt_tokens": 311,
+      "completion_tokens": 191,
+      "total_tokens": 502
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_07",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #7，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 任务未完成 问题。"
+      }
+    ],
+    "final_output": "抱歉，我尝试了但失败了。",
+    "success": false,
+    "latency_ms": 544,
+    "ttft_ms": 178,
+    "token_usage": {
+      "prompt_tokens": 441,
+      "completion_tokens": 153,
+      "total_tokens": 594
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_08",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #8，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 无工具调用 问题。"
+      }
+    ],
+    "final_output": "我无法完成此任务，因为没有相关工具。",
+    "success": false,
+    "latency_ms": 1731,
+    "ttft_ms": 540,
+    "token_usage": {
+      "prompt_tokens": 159,
+      "completion_tokens": 47,
+      "total_tokens": 206
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_09",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #9，需要多步推理和工具调用。",
+    "tool_calls": [
+      {
+        "name": "search_db",
+        "args": {
+          "invalid": "key"
+        },
+        "success": false
+      }
+    ],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 工具参数错误 问题。"
+      }
+    ],
+    "final_output": "Error: Invalid argument 'date'",
+    "success": false,
+    "latency_ms": 418,
+    "ttft_ms": 188,
+    "token_usage": {
+      "prompt_tokens": 462,
+      "completion_tokens": 79,
+      "total_tokens": 541
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_10",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #10，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 无工具调用 问题。"
+      }
+    ],
+    "final_output": "我无法完成此任务，因为没有相关工具。",
+    "success": false,
+    "latency_ms": 929,
+    "ttft_ms": 405,
+    "token_usage": {
+      "prompt_tokens": 136,
+      "completion_tokens": 41,
+      "total_tokens": 177
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_11",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #11，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 死循环 问题。"
+      }
+    ],
+    "final_output": "Error: Max recursion depth exceeded",
+    "success": false,
+    "latency_ms": 2011,
+    "ttft_ms": 299,
+    "token_usage": {
+      "prompt_tokens": 280,
+      "completion_tokens": 57,
+      "total_tokens": 337
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_12",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #12，需要多步推理和工具调用。",
+    "tool_calls": [
+      {
+        "name": "search_db",
+        "args": {
+          "invalid": "key"
+        },
+        "success": false
+      }
+    ],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 工具参数错误 问题。"
+      }
+    ],
+    "final_output": "Error: Invalid argument 'date'",
+    "success": false,
+    "latency_ms": 2233,
+    "ttft_ms": 660,
+    "token_usage": {
+      "prompt_tokens": 127,
+      "completion_tokens": 25,
+      "total_tokens": 152
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_13",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #13，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 死循环 问题。"
+      }
+    ],
+    "final_output": "Error: Max recursion depth exceeded",
+    "success": false,
+    "latency_ms": 821,
+    "ttft_ms": 288,
+    "token_usage": {
+      "prompt_tokens": 86,
+      "completion_tokens": 120,
+      "total_tokens": 206
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_14",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #14，需要多步推理和工具调用。",
+    "tool_calls": [
+      {
+        "name": "search_db",
+        "args": {
+          "invalid": "key"
+        },
+        "success": false
+      }
+    ],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 工具参数错误 问题。"
+      }
+    ],
+    "final_output": "Error: Invalid argument 'date'",
+    "success": false,
+    "latency_ms": 1015,
+    "ttft_ms": 174,
+    "token_usage": {
+      "prompt_tokens": 78,
+      "completion_tokens": 177,
+      "total_tokens": 255
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_15",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #15，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 任务未完成 问题。"
+      }
+    ],
+    "final_output": "抱歉，我尝试了但失败了。",
+    "success": false,
+    "latency_ms": 1875,
+    "ttft_ms": 440,
+    "token_usage": {
+      "prompt_tokens": 213,
+      "completion_tokens": 37,
+      "total_tokens": 250
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_16",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #16，需要多步推理和工具调用。",
+    "tool_calls": [
+      {
+        "name": "search_db",
+        "args": {
+          "invalid": "key"
+        },
+        "success": false
+      }
+    ],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 工具参数错误 问题。"
+      }
+    ],
+    "final_output": "Error: Invalid argument 'date'",
+    "success": false,
+    "latency_ms": 925,
+    "ttft_ms": 360,
+    "token_usage": {
+      "prompt_tokens": 227,
+      "completion_tokens": 125,
+      "total_tokens": 352
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_17",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #17，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 死循环 问题。"
+      }
+    ],
+    "final_output": "Error: Max recursion depth exceeded",
+    "success": false,
+    "latency_ms": 1648,
+    "ttft_ms": 147,
+    "token_usage": {
+      "prompt_tokens": 365,
+      "completion_tokens": 174,
+      "total_tokens": 539
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_18",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #18，需要多步推理和工具调用。",
+    "tool_calls": [
+      {
+        "name": "search_db",
+        "args": {
+          "invalid": "key"
+        },
+        "success": false
+      }
+    ],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 工具参数错误 问题。"
+      }
+    ],
+    "final_output": "Error: Invalid argument 'date'",
+    "success": false,
+    "latency_ms": 265,
+    "ttft_ms": 54,
+    "token_usage": {
+      "prompt_tokens": 343,
+      "completion_tokens": 100,
+      "total_tokens": 443
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_19",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #19，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 任务未完成 问题。"
+      }
+    ],
+    "final_output": "抱歉，我尝试了但失败了。",
+    "success": false,
+    "latency_ms": 2960,
+    "ttft_ms": 195,
+    "token_usage": {
+      "prompt_tokens": 149,
+      "completion_tokens": 88,
+      "total_tokens": 237
+    }
+  },
+  {
+    "session_id": "sim_agent_bad_20",
+    "eval_type": "agent",
+    "task_description": "执行复杂任务 #20，需要多步推理和工具调用。",
+    "tool_calls": [],
+    "decision_steps": [
+      {
+        "thought": "尝试执行任务，但遇到了 任务未完成 问题。"
+      }
+    ],
+    "final_output": "抱歉，我尝试了但失败了。",
+    "success": false,
+    "latency_ms": 2421,
+    "ttft_ms": 384,
+    "token_usage": {
+      "prompt_tokens": 259,
+      "completion_tokens": 179,
+      "total_tokens": 438
+    }
+  },
+  {
+    "session_id": "sim_multi_good_01",
+    "eval_type": "multi_turn",
+    "messages": [
+      {
+        "role": "user",
+        "content": "你好"
+      },
+      {
+        "role": "assistant",
+        "content": "你好！很高兴为你服务。"
+      },
+      {
+        "role": "user",
+        "content": "介绍一下 Python"
+      },
+      {
+        "role": "assistant",
+        "content": "Python 是一种广泛使用的高级编程语言..."
+      }
+    ],
+    "latency_ms": 2004,
+    "ttft_ms": 478,
+    "token_usage": {
+      "prompt_tokens": 128,
+      "completion_tokens": 70,
+      "total_tokens": 198
+    }
+  }
+]

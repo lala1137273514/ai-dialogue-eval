@@ -1,0 +1,24 @@
+﻿============================================================
+KST Agent 评估系统 - 综合测试报告
+测试时间: 2026-01-02 22:59:51
+============================================================
+
+============================================================
+【测试 1】trace_store.py - Trace 存储模块 (v0.2.0)
+============================================================
+python : Traceback (most recent call last):
+所在位置 行:1 字符: 1
++ python test_comprehensive.py 2>&1 | Out-File -File
+Path test_report_ou ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceb 
+   ack (most recent call last)::String) [], Remote  
+  Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\11372\Desktop\项目\多轮对话评测\test_compre
+hensive.py", line 25, in <module>
+    print("\n\U0001f4cc 1.1 初始化数据库...")
+UnicodeEncodeError: 'gbk' codec can't encode charact
+er '\U0001f4cc' in position 2: illegal multibyte seq
+uence

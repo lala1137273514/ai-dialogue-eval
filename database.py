@@ -18,7 +18,7 @@ from pathlib import Path
 class EvalDatabase:
     """评测结果数据库"""
     
-    def __init__(self, db_path: str = "eval_results.db"):
+    def __init__(self, db_path: str = "data/eval_results.db"):
         self.db_path = db_path
         self.conn = None
         self._init_db()
@@ -355,7 +355,7 @@ class EvalDatabase:
 # 全局数据库实例
 _db_instance = None
 
-def get_database(db_path: str = "eval_results.db") -> EvalDatabase:
+def get_database(db_path: str = "data/eval_results.db") -> EvalDatabase:
     """获取数据库实例（单例模式）"""
     global _db_instance
     if _db_instance is None:
