@@ -13,6 +13,8 @@ from workflow_parser import DifyWorkflowParser
 from database import get_database
 from trace_store import TraceStore, init_db
 from eval_dispatcher import run_evaluation_task  # 🆕 v0.8.0: 引入统一评测调度器 # 🆕 v0.3.0: Trace 追踪
+from evaluator_store import EvaluatorStore  # 🆕 v1.0.0: 评估器存储
+from evaluator_generator import EvaluatorGenerator  # 🆕 v1.0.0: 评估器生成器
 
 # ==========================================
 # 页面配置
@@ -868,7 +870,7 @@ elif current_page == 'logs':
                     st.warning(f"发现 {low_count} 个低分回复需深度分析")
 
 # -----------------------------------------------------------------------------
-# 智能评测
+# 智能评测 (🆕 v1.0.0: 集成评估器选择)
 # -----------------------------------------------------------------------------
 elif current_page == 'eval':
     if st.button("← 返回工作台"):
@@ -878,21 +880,66 @@ elif current_page == 'eval':
     st.markdown('<h1 class="main-title">🚀 智能评测</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-title">两阶段评测：快速打分 + 低分深度分析</p>', unsafe_allow_html=True)
     
-    if not logs_data or not rubric_data:
-        st.warning("⚠️ 请先加载数据")
+    if not logs_data:
+        st.warning("⚠️ 请先加载对话数据")
         st.stop()
     
-    # 配置选项
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        if workflow_parser:
-            st.success("✅ 工作流已加载，低分项将自动进行节点溯源")
+    # 🆕 v1.0.0: 评估器选择
+    st.markdown("### 📋 评测配置")
+    
+    # 确保默认评估器存在
+    EvaluatorStore.ensure_default_evaluator()
+    
+    # 获取所有评估器
+    evaluators = EvaluatorStore.list_evaluators()
+    
+    col_eval, col_threshold = st.columns([3, 1])
+    
+    with col_eval:
+        if evaluators:
+            # 构建选项
+            evaluator_options = {ev['evaluator_id']: ev for ev in evaluators}
+            
+            # 默认选中默认评估器
+            default_evaluator = EvaluatorStore.get_default_evaluator()
+            default_idx = 0
+            if default_evaluator:
+                for i, ev in enumerate(evaluators):
+                    if ev['evaluator_id'] == default_evaluator['evaluator_id']:
+                        default_idx = i
+                        break
+            
+            selected_evaluator = st.selectbox(
+                "选择评估器",
+                options=evaluators,
+                index=default_idx,
+                format_func=lambda x: f"{'⭐ ' if x.get('is_default') else ''}{x['name']} v{x['version']} ({len(x.get('dimensions', []))}维度)",
+                help="评估器决定使用哪些维度和权重来评测对话质量"
+            )
+            
+            # 显示评估器摘要
+            if selected_evaluator:
+                dims = selected_evaluator.get('dimensions', [])
+                dim_names = [f"{d['name']}({d.get('weight', 0)*100:.0f}%)" for d in dims[:4]]
+                st.caption(f"维度: {', '.join(dim_names)}{'...' if len(dims) > 4 else ''}")
         else:
-            st.info("ℹ️ 未加载工作流，低分项将不含节点溯源")
-    with col2:
+            st.error("❌ 未找到评估器，请先在系统设置中创建评估器")
+            if st.button("前往创建"):
+                st.session_state['current_page'] = 'settings'
+                st.rerun()
+            st.stop()
+    
+    with col_threshold:
         low_threshold = st.selectbox("低分阈值", [1, 2, 3, 4], index=2, help="综合分 ≤ 该值触发深度分析")
-    with col3:
-        start_eval = st.button("▶️ 开始评测", type="primary", use_container_width=True)
+    
+    # 工作流状态
+    if workflow_parser:
+        st.success("✅ 工作流已加载，低分项将自动进行节点溯源")
+    else:
+        st.info("ℹ️ 未加载工作流，低分项将不含节点溯源")
+    
+    # 开始评测按钮
+    start_eval = st.button("▶️ 开始评测", type="primary", use_container_width=True)
     
     if start_eval:
         progress = st.progress(0)
@@ -903,9 +950,12 @@ elif current_page == 'eval':
             status.text(f"评测中: {desc}")
         
         try:
+            # 🆕 v1.0.0: 使用选中的评估器维度
+            selected_dims = selected_evaluator.get('dimensions', [])
+            
             results = run_log_evaluation(
                 logs_data, 
-                rubric_data['rubrics'],
+                selected_dims,  # 使用评估器的维度而非 rubric_data
                 workflow_parser=workflow_parser,
                 low_score_threshold=low_threshold,
                 progress_callback=update_progress
@@ -1621,31 +1671,50 @@ elif current_page == 'eval_center':
             st.markdown(f"**📊 已加载: {len(data)} 条数据**")
     
     with col_rubric:
-        st.markdown("### Step 3: 评测维度配置")
+        st.markdown("### Step 3: 评估器选择")
         
-        # 加载 rubric
-        rubric_data = st.session_state.get('rubric_data') or load_json_path("config/rubric.json")
+        # 🆕 v1.0.0: 使用评估器替代维度选择
+        EvaluatorStore.ensure_default_evaluator()
+        evaluators = EvaluatorStore.list_evaluators()
         
-        # 处理两种格式: 列表或字典
-        dimensions = []
-        if rubric_data:
-            if isinstance(rubric_data, dict) and 'rubrics' in rubric_data:
-                dims = rubric_data['rubrics']
-                dimensions = dims if isinstance(dims, list) else dims.get('shared', [])
-            elif isinstance(rubric_data, list):
-                dimensions = rubric_data
-        
-        if dimensions:
-            st.markdown("**选择启用的维度:**")
-            selected_dims = []
-            for dim in dimensions:
-                dim_name = dim.get('name', 'unknown') if isinstance(dim, dict) else str(dim)
-                if st.checkbox(f"{dim_name}", value=True, key=f"dim_{dim_name}"):
-                    selected_dims.append(dim)
+        if evaluators:
+            # 默认选中默认评估器
+            default_evaluator = EvaluatorStore.get_default_evaluator()
+            default_idx = 0
+            if default_evaluator:
+                for i, ev in enumerate(evaluators):
+                    if ev['evaluator_id'] == default_evaluator['evaluator_id']:
+                        default_idx = i
+                        break
             
-            st.caption(f"已选择 {len(selected_dims)}/{len(dimensions)} 个维度")
+            selected_evaluator = st.selectbox(
+                "选择评估器",
+                options=evaluators,
+                index=default_idx,
+                format_func=lambda x: f"{'⭐ ' if x.get('is_default') else ''}{x['name']} v{x['version']}",
+                key="eval_center_evaluator"
+            )
+            
+            if selected_evaluator:
+                dims = selected_evaluator.get('dimensions', [])
+                selected_dims = dims  # 使用评估器的所有维度
+                
+                st.markdown("**评估维度:**")
+                for dim in dims[:4]:
+                    weight = dim.get('weight', 0)
+                    st.markdown(f"- {dim['name']} ({weight*100:.0f}%)")
+                if len(dims) > 4:
+                    st.caption(f"... 还有 {len(dims)-4} 个维度")
+                
+                st.caption(f"共 {len(dims)} 个维度")
+                
+                # 存储选中的评估器到 session state
+                st.session_state['eval_center_selected_evaluator'] = selected_evaluator
         else:
-            st.warning("请先配置评分标准 (rubric.json)")
+            st.warning("请先在系统设置中创建评估器")
+            if st.button("前往创建评估器"):
+                st.session_state['current_page'] = 'settings'
+                st.rerun()
     
     st.divider()
     
@@ -1683,22 +1752,24 @@ elif current_page == 'eval_center':
                     progress_bar.progress(progress)
                     status_text.text(f"{message} ({current}/{total})")
                 
-                # 获取评分标准 (如果没有则加载默认)
-                rubrics = st.session_state.get('rubrics_data', [])
-                if not rubrics:
-                    # 尝试从 config 加载
-                    try:
-                        with open('config/rubric.json', 'r', encoding='utf-8') as f:
-                            rubrics = json.load(f).get('rubrics', [])
-                    except:
-                        pass
+                # 🆕 v1.0.0: 使用选中的评估器维度
+                selected_evaluator = st.session_state.get('eval_center_selected_evaluator')
+                if selected_evaluator:
+                    rubrics = selected_evaluator.get('dimensions', [])
+                else:
+                    # 回退: 使用默认评估器
+                    default_eval = EvaluatorStore.get_default_evaluator()
+                    rubrics = default_eval.get('dimensions', []) if default_eval else []
                 
-                # 执行评测 - 新版返回 (results, summary)
-                results, summary = run_evaluation_task(
-                    data_list=data,
-                    rubrics=rubrics,
-                    progress_callback=update_progress
-                )
+                if not rubrics:
+                    st.error("❌ 未找到评估维度，请先选择评估器")
+                else:
+                    # 执行评测 - 新版返回 (results, summary)
+                    results, summary = run_evaluation_task(
+                        data_list=data,
+                        rubrics=rubrics,
+                        progress_callback=update_progress
+                    )
                 
                 status_text.text("✅ 评测完成!")
                 progress_bar.progress(1.0)
@@ -2295,16 +2366,328 @@ elif current_page == 'data_explorer':
         st.code(traceback.format_exc())
 
 # ==========================================
-# 🆕 v0.6.0: 系统设置页面 (整合 rubric + prompt)
+# 🆕 v1.0.0: 系统设置页面 (整合 evaluator + rubric + prompt)
 # ==========================================
 elif current_page == 'settings':
     st.markdown('<h1 class="main-title">⚙️ 系统设置</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-title">评分维度 | Prompt 模板</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">评估器管理 | 评分维度 | Prompt 模板</p>', unsafe_allow_html=True)
     
-    tab_rubric, tab_prompt = st.tabs(["🛠️ 评分维度", "🎨 Prompt 模板"])
+    # 确保默认评估器存在
+    EvaluatorStore.ensure_default_evaluator()
     
+    tab_evaluator, tab_rubric, tab_prompt = st.tabs(["🧪 评估器管理", "🛠️ 评分维度", "🎨 Prompt 模板"])
+    
+    # ==========================================
+    # Tab 1: 评估器管理 (🆕 v1.0.0)
+    # ==========================================
+    with tab_evaluator:
+        st.markdown("### 🧪 评估器管理")
+        st.caption("评估器是可复用的评估配置模板，包含评估维度、权重和评分标准。")
+        
+        # 操作按钮行
+        btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 2])
+        with btn_col1:
+            if st.button("➕ 创建评估器", use_container_width=True):
+                st.session_state['evaluator_mode'] = 'create'
+                st.rerun()
+        with btn_col2:
+            if st.button("🤖 LLM 生成", use_container_width=True):
+                st.session_state['evaluator_mode'] = 'llm_generate'
+                st.rerun()
+        
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        
+        # 获取当前模式
+        evaluator_mode = st.session_state.get('evaluator_mode', 'list')
+        
+        # ==========================================
+        # 模式: 列表视图
+        # ==========================================
+        if evaluator_mode == 'list':
+            evaluators = EvaluatorStore.list_evaluators()
+            
+            if not evaluators:
+                st.info("暂无评估器，请创建一个新的评估器。")
+            else:
+                st.markdown(f"**共 {len(evaluators)} 个评估器:**")
+                
+                for ev in evaluators:
+                    is_default = ev.get('is_default', False)
+                    is_system = ev.get('is_system', False)
+                    
+                    # 图标
+                    default_icon = "⭐" if is_default else ""
+                    system_icon = "🔒" if is_system else ""
+                    
+                    # 评测类型标签
+                    eval_types = ev.get('eval_types', [])
+                    type_labels = {'single_turn': '单轮', 'multi_turn': '多轮', 'agent': 'Agent'}
+                    types_str = ", ".join([type_labels.get(t, t) for t in eval_types])
+                    
+                    with st.expander(f"{default_icon}{system_icon} {ev['name']} v{ev['version']} ({len(ev.get('dimensions', []))}维度)"):
+                        st.markdown(f"**ID**: `{ev['evaluator_id']}`")
+                        st.markdown(f"**描述**: {ev.get('description', '无描述')}")
+                        st.markdown(f"**适用类型**: {types_str}")
+                        st.markdown(f"**创建方式**: {ev.get('created_by', 'manual')}")
+                        st.markdown(f"**创建时间**: {ev.get('created_at', 'N/A')}")
+                        
+                        # 维度列表
+                        st.markdown("**评估维度:**")
+                        dims = ev.get('dimensions', [])
+                        for dim in dims:
+                            weight_pct = f"{dim.get('weight', 0) * 100:.0f}%"
+                            st.markdown(f"- **{dim['name']}** (权重: {weight_pct})")
+                        
+                        # 操作按钮
+                        col_a, col_b, col_c = st.columns(3)
+                        with col_a:
+                            if not is_default:
+                                if st.button("⭐ 设为默认", key=f"default_{ev['evaluator_id']}"):
+                                    EvaluatorStore.set_default_evaluator(ev['evaluator_id'])
+                                    st.success("已设为默认评估器")
+                                    st.rerun()
+                        with col_b:
+                            if not is_system:
+                                if st.button("✏️ 编辑", key=f"edit_{ev['evaluator_id']}"):
+                                    st.session_state['evaluator_mode'] = 'edit'
+                                    st.session_state['edit_evaluator_id'] = ev['evaluator_id']
+                                    st.rerun()
+                        with col_c:
+                            if not is_system:
+                                if st.button("🗑️ 删除", key=f"delete_{ev['evaluator_id']}"):
+                                    try:
+                                        EvaluatorStore.delete_evaluator(ev['evaluator_id'])
+                                        st.success("已删除")
+                                        st.rerun()
+                                    except ValueError as e:
+                                        st.error(str(e))
+        
+        # ==========================================
+        # 模式: 创建评估器
+        # ==========================================
+        elif evaluator_mode == 'create':
+            st.markdown("### ➕ 创建新评估器")
+            
+            if st.button("← 返回列表"):
+                st.session_state['evaluator_mode'] = 'list'
+                st.rerun()
+            
+            with st.form("create_evaluator_form"):
+                name = st.text_input("评估器名称", placeholder="例如: 客服质量评估")
+                description = st.text_area("描述", placeholder="描述评估器的用途和适用场景")
+                version = st.text_input("版本", value="1.0")
+                
+                eval_types = st.multiselect(
+                    "适用评测类型",
+                    options=["single_turn", "multi_turn", "agent"],
+                    default=["multi_turn"],
+                    format_func=lambda x: {"single_turn": "单轮对话", "multi_turn": "多轮对话", "agent": "Agent 评测"}[x]
+                )
+                
+                st.markdown("**评估维度** (JSON 格式):")
+                default_dims = json.dumps([
+                    {
+                        "name": "维度1",
+                        "weight": 0.5,
+                        "description": "维度描述",
+                        "criteria": {"1": "差", "3": "中", "5": "优"},
+                        "low_score_checklist": ["检查项1"]
+                    },
+                    {
+                        "name": "维度2",
+                        "weight": 0.5,
+                        "description": "维度描述",
+                        "criteria": {"1": "差", "3": "中", "5": "优"},
+                        "low_score_checklist": ["检查项1"]
+                    }
+                ], ensure_ascii=False, indent=2)
+                
+                dimensions_json = st.text_area("维度配置", value=default_dims, height=300)
+                
+                submitted = st.form_submit_button("💾 保存评估器", type="primary")
+                
+                if submitted:
+                    try:
+                        dimensions = json.loads(dimensions_json)
+                        
+                        # 验证维度
+                        errors = EvaluatorGenerator.validate_dimensions(dimensions)
+                        if errors:
+                            for err in errors:
+                                st.error(err)
+                        else:
+                            evaluator_id = EvaluatorStore.create_evaluator(
+                                name=name,
+                                dimensions=dimensions,
+                                eval_types=eval_types,
+                                version=version,
+                                description=description,
+                                created_by="manual"
+                            )
+                            st.success(f"✅ 评估器创建成功! ID: {evaluator_id}")
+                            st.session_state['evaluator_mode'] = 'list'
+                            st.rerun()
+                    except json.JSONDecodeError as e:
+                        st.error(f"JSON 解析错误: {e}")
+        
+        # ==========================================
+        # 模式: LLM 生成评估器
+        # ==========================================
+        elif evaluator_mode == 'llm_generate':
+            st.markdown("### 🤖 LLM 生成评估器")
+            st.caption("输入自然语言描述或上传文档，AI 将自动生成评估器配置。")
+            
+            if st.button("← 返回列表"):
+                st.session_state['evaluator_mode'] = 'list'
+                st.rerun()
+            
+            input_method = st.radio("输入方式", ["自然语言描述", "上传文档"], horizontal=True)
+            
+            user_input = ""
+            
+            if input_method == "自然语言描述":
+                user_input = st.text_area(
+                    "描述您的评估需求",
+                    placeholder="例如：我需要一个评估客服对话的评估器，重点关注：\n1. 情绪管理能力 (30%)\n2. 问题解决率 (40%)\n3. 沟通专业度 (30%)",
+                    height=200
+                )
+            else:
+                uploaded_file = st.file_uploader("上传评估标准文档", type=["txt", "md", "json"])
+                if uploaded_file:
+                    user_input = uploaded_file.read().decode('utf-8')
+                    st.text_area("文档内容预览", user_input[:1000] + "..." if len(user_input) > 1000 else user_input, height=150, disabled=True)
+            
+            if st.button("🔮 生成预览", type="primary", disabled=not user_input):
+                with st.spinner("AI 正在生成评估器配置..."):
+                    try:
+                        generator = EvaluatorGenerator()
+                        if input_method == "自然语言描述":
+                            result = generator.generate_from_text(user_input)
+                        else:
+                            result = generator.generate_from_document(user_input)
+                        
+                        if 'error' in result and not result.get('dimensions'):
+                            st.error(f"生成失败: {result['error']}")
+                        else:
+                            st.session_state['generated_evaluator'] = result
+                            st.success("✅ 生成成功!")
+                    except Exception as e:
+                        st.error(f"生成失败: {e}")
+            
+            # 显示生成结果
+            if 'generated_evaluator' in st.session_state:
+                result = st.session_state['generated_evaluator']
+                
+                st.markdown("---")
+                st.markdown("### 📋 生成预览")
+                
+                # Markdown 预览
+                markdown_preview = EvaluatorGenerator.render_as_markdown(result)
+                st.markdown(markdown_preview)
+                
+                # JSON 编辑
+                with st.expander("✏️ 编辑 JSON"):
+                    edited_json = st.text_area(
+                        "JSON 配置",
+                        value=json.dumps(result, ensure_ascii=False, indent=2),
+                        height=400
+                    )
+                
+                col_save, col_cancel = st.columns(2)
+                with col_save:
+                    if st.button("💾 保存评估器", type="primary", use_container_width=True):
+                        try:
+                            final_config = json.loads(edited_json) if 'edited_json' in dir() else result
+                            
+                            evaluator_id = EvaluatorStore.create_evaluator(
+                                name=final_config.get('name', '未命名评估器'),
+                                dimensions=final_config.get('dimensions', []),
+                                eval_types=final_config.get('eval_types', ['multi_turn']),
+                                version=final_config.get('version', '1.0'),
+                                description=final_config.get('description', ''),
+                                created_by="llm_generated"
+                            )
+                            st.success(f"✅ 评估器已保存! ID: {evaluator_id}")
+                            del st.session_state['generated_evaluator']
+                            st.session_state['evaluator_mode'] = 'list'
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"保存失败: {e}")
+                
+                with col_cancel:
+                    if st.button("🔄 重新生成", use_container_width=True):
+                        del st.session_state['generated_evaluator']
+                        st.rerun()
+        
+        # ==========================================
+        # 模式: 编辑评估器
+        # ==========================================
+        elif evaluator_mode == 'edit':
+            evaluator_id = st.session_state.get('edit_evaluator_id')
+            ev = EvaluatorStore.get_evaluator(evaluator_id)
+            
+            if not ev:
+                st.error("评估器不存在")
+                st.session_state['evaluator_mode'] = 'list'
+                st.rerun()
+            
+            st.markdown(f"### ✏️ 编辑评估器: {ev['name']}")
+            
+            if st.button("← 返回列表"):
+                st.session_state['evaluator_mode'] = 'list'
+                st.rerun()
+            
+            with st.form("edit_evaluator_form"):
+                name = st.text_input("评估器名称", value=ev['name'])
+                description = st.text_area("描述", value=ev.get('description', ''))
+                version = st.text_input("版本", value=ev['version'])
+                
+                eval_types = st.multiselect(
+                    "适用评测类型",
+                    options=["single_turn", "multi_turn", "agent"],
+                    default=ev.get('eval_types', ['multi_turn']),
+                    format_func=lambda x: {"single_turn": "单轮对话", "multi_turn": "多轮对话", "agent": "Agent 评测"}[x]
+                )
+                
+                st.markdown("**评估维度** (JSON 格式):")
+                dimensions_json = st.text_area(
+                    "维度配置",
+                    value=json.dumps(ev.get('dimensions', []), ensure_ascii=False, indent=2),
+                    height=300
+                )
+                
+                submitted = st.form_submit_button("💾 保存修改", type="primary")
+                
+                if submitted:
+                    try:
+                        dimensions = json.loads(dimensions_json)
+                        
+                        # 验证维度
+                        errors = EvaluatorGenerator.validate_dimensions(dimensions)
+                        if errors:
+                            for err in errors:
+                                st.error(err)
+                        else:
+                            EvaluatorStore.update_evaluator(
+                                evaluator_id=evaluator_id,
+                                name=name,
+                                dimensions=dimensions,
+                                eval_types=eval_types,
+                                version=version,
+                                description=description
+                            )
+                            st.success("✅ 评估器已更新!")
+                            st.session_state['evaluator_mode'] = 'list'
+                            st.rerun()
+                    except json.JSONDecodeError as e:
+                        st.error(f"JSON 解析错误: {e}")
+    
+    # ==========================================
+    # Tab 2: 评分维度 (原有功能)
+    # ==========================================
     with tab_rubric:
-        st.markdown("### 🛠️ 评分维度配置")
+        st.markdown("### 🛠️ 评分维度配置 (旧版 - 建议使用评估器)")
+        st.warning("⚠️ 此功能将被评估器管理替代，建议迁移到评估器。")
         
         rubric_path = st.text_input("配置文件路径", "config/rubric.json", key="settings_rubric_path")
         
@@ -2333,6 +2716,9 @@ elif current_page == 'settings':
         else:
             st.warning("未加载配置文件")
     
+    # ==========================================
+    # Tab 3: Prompt 模板 (原有功能)
+    # ==========================================
     with tab_prompt:
         st.markdown("### 🎨 Prompt 模板")
         
@@ -2351,6 +2737,7 @@ elif current_page == 'settings':
         """, language="text")
         
         st.info("Prompt 模板编辑功能开发中...")
+
 
 # ==========================================
 # 透明演示横幅（底部固定）

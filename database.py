@@ -95,6 +95,29 @@ class EvalDatabase:
             )
         """)
         
+        # 🆕 v1.0.0: 评估器表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS evaluators (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                evaluator_id TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                version TEXT DEFAULT '1.0',
+                description TEXT,
+                eval_types TEXT,
+                dimensions TEXT NOT NULL,
+                is_default BOOLEAN DEFAULT 0,
+                is_system BOOLEAN DEFAULT 0,
+                created_by TEXT DEFAULT 'manual',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                parent_version TEXT
+            )
+        """)
+        
+        # 创建评估器索引
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluators_name ON evaluators(name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluators_default ON evaluators(is_default)")
+        
         self.conn.commit()
     
     def save_evaluation_results(self, 
