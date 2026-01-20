@@ -54,6 +54,22 @@ def index():
 def auth_check():
     return jsonify({"status": "ok"}), 200
 
+# Dify 验证连接时会调用的接口
+@app.route('/api/public/projects', methods=['GET'])
+def list_projects():
+    return jsonify({
+        "data": [
+            {
+                "id": "default_project",
+                "name": "KST Eval Platform",
+                "publicKey": "pk-eval-platform",
+                "plan": "hobby",
+                "status": "active"
+            }
+        ]
+    }), 200
+
+
 
 
 @app.route('/api/v1/health', methods=['GET'])
