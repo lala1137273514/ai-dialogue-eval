@@ -2747,11 +2747,18 @@ elif current_page == 'settings':
         
         # 导入 langfuse_adapter 模块
         try:
+            import sys
+            import os
+            # 确保当前目录在 Python 路径中（解决 Zeabur 部署环境问题）
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.insert(0, current_dir)
+            
             from langfuse_adapter import API_KEYS, add_api_key, remove_api_key, list_api_keys
             adapter_available = True
-        except ImportError:
+        except ImportError as e:
             adapter_available = False
-            st.error("⚠️ langfuse_adapter 模块未找到，请检查文件是否存在。")
+            st.error(f"⚠️ langfuse_adapter 模块未找到: {e}")
         
         if adapter_available:
             # 服务状态
