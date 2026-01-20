@@ -2935,8 +2935,77 @@ Host: http://your-server-ip:5000
                     st.error("❌ 无法连接到 API 服务")
                 except Exception as e:
                     st.error(f"❌ 错误: {e}")
-
-
+            
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            
+            # 🆕 可观测性数据 - Langfuse Events
+            st.markdown("#### 🔍 可观测性数据 (Langfuse Events)")
+            st.caption("展示原始 LLM 调用信息：模型、Token 使用、延迟等")
+            
+            col_events, col_type = st.columns([2, 1])
+            with col_type:
+                event_type_filter = st.selectbox("事件类型", ["全部", "generation-create", "span-create", "trace-create"], index=0)
+            with col_events:
+                st.markdown("<br>", unsafe_allow_html=True)
+                fetch_events = st.button("🔄 获取 Events", use_container_width=True)
+            
+            if fetch_events:
+                import requests
+                try:
+                    params = {"limit": 20}
+                    if event_type_filter != "全部":
+                        params["event_type"] = event_type_filter
+                    
+                    resp = requests.get(f"{api_url}/api/v1/langfuse/events", params=params, timeout=10)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        events = data.get('events', [])
+                        if events:
+                            st.success(f"✅ 获取到 {len(events)} 条 Events")
+                            
+                            # Token 统计
+                            total_input = sum(e.get('input_tokens') or 0 for e in events)
+                            total_output = sum(e.get('output_tokens') or 0 for e in events)
+                            total_latency = sum(e.get('latency_ms') or 0 for e in events)
+                            models = list(set(e.get('model') for e in events if e.get('model')))
+                            
+                            stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+                            with stat_col1:
+                                st.metric("输入 Tokens", f"{total_input:,}")
+                            with stat_col2:
+                                st.metric("输出 Tokens", f"{total_output:,}")
+                            with stat_col3:
+                                st.metric("总延迟", f"{total_latency:,} ms")
+                            with stat_col4:
+                                st.metric("使用模型", ", ".join(models[:2]) if models else "-")
+                            
+                            # Events 表格
+                            import pandas as pd
+                            event_rows = []
+                            for e in events:
+                                event_rows.append({
+                                    "类型": e.get('event_type', '')[:20],
+                                    "名称": (e.get('name') or '')[:25],
+                                    "模型": e.get('model') or '-',
+                                    "输入 Tokens": e.get('input_tokens') or 0,
+                                    "输出 Tokens": e.get('output_tokens') or 0,
+                                    "延迟(ms)": e.get('latency_ms') or 0,
+                                    "时间": (e.get('created_at') or '')[:19]
+                                })
+                            
+                            df_events = pd.DataFrame(event_rows)
+                            st.dataframe(df_events, use_container_width=True, hide_index=True)
+                            
+                            with st.expander("📄 查看完整 Events JSON"):
+                                st.json(events)
+                        else:
+                            st.info("暂无 Events 数据。请先在 Dify 中发起对话，数据会自动记录。")
+                    else:
+                        st.error(f"❌ 获取失败: HTTP {resp.status_code}")
+                except requests.exceptions.ConnectionError:
+                    st.error("❌ 无法连接到 API 服务")
+                except Exception as e:
+                    st.error(f"❌ 错误: {e}")
 
 
 
