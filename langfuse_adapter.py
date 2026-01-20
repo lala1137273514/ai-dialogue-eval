@@ -273,6 +273,23 @@ def handle_generation_create(body: Dict, timestamp: str):
         }
     )
     
+    # 🆕 保存原始事件 (可观测性数据)
+    save_raw_event(
+        event_id=gen_id,
+        event_type='generation-create',
+        trace_id=created_trace_id,
+        parent_id=trace_id,
+        name=name,
+        raw_body=body,
+        model=model,
+        input_tokens=usage.get('promptTokens', usage.get('input', 0)),
+        output_tokens=usage.get('completionTokens', usage.get('output', 0)),
+        total_tokens=usage.get('totalTokens', usage.get('total', 0)),
+        latency_ms=latency_ms,
+        start_time=start_time,
+        end_time=end_time
+    )
+    
     print(f"[Langfuse Adapter] 🤖 Generation: {created_trace_id} | Model: {model} | Tokens: {usage}")
     
     # 如果有输入输出，自动评测
@@ -440,6 +457,138 @@ def health():
 
 
 # ==========================================
+# 🆕 原始事件存储与查询 (融合可观测数据)
+# ==========================================
+
+def save_raw_event(
+    event_id: str,
+    event_type: str,
+    trace_id: str = None,
+    parent_id: str = None,
+    name: str = None,
+    raw_body: dict = None,
+    model: str = None,
+    input_tokens: int = None,
+    output_tokens: int = None,
+    total_tokens: int = None,
+    latency_ms: int = None,
+    start_time: str = None,
+    end_time: str = None
+) -> bool:
+    """
+    保存原始 Langfuse 事件
+    
+    用于保留完整的可观测性数据，不丢失任何原始信息。
+    """
+    from trace_store import get_db
+    
+    try:
+        with get_db() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO langfuse_events 
+                (event_id, event_type, trace_id, parent_id, name, raw_body, 
+                 model, input_tokens, output_tokens, total_tokens, latency_ms, 
+                 start_time, end_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                event_id,
+                event_type,
+                trace_id,
+                parent_id,
+                name,
+                json.dumps(raw_body or {}, ensure_ascii=False),
+                model,
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                latency_ms,
+                start_time,
+                end_time
+            ))
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"[Langfuse Adapter] Error saving raw event: {e}")
+        return False
+
+
+def get_langfuse_events(
+    trace_id: str = None,
+    event_type: str = None,
+    limit: int = 50
+) -> List[Dict]:
+    """
+    获取 Langfuse 事件列表
+    
+    Args:
+        trace_id: 按 Trace ID 筛选
+        event_type: 按事件类型筛选
+        limit: 返回条数
+    
+    Returns:
+        事件列表
+    """
+    from trace_store import get_db
+    
+    with get_db() as conn:
+        query = "SELECT * FROM langfuse_events WHERE 1=1"
+        params = []
+        
+        if trace_id:
+            query += " AND trace_id = ?"
+            params.append(trace_id)
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+        
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        
+        rows = conn.execute(query, params).fetchall()
+        
+        events = []
+        for r in rows:
+            event = dict(r)
+            try:
+                event['raw_body'] = json.loads(event['raw_body'] or '{}')
+            except:
+                event['raw_body'] = {}
+            events.append(event)
+        
+        return events
+
+
+def get_trace_with_events(trace_id: str) -> Optional[Dict]:
+    """
+    获取 Trace 详情，包含关联的 Langfuse 事件
+    
+    融合评测数据与可观测性数据的核心函数。
+    """
+    # 获取 Trace 基础信息
+    trace = TraceStore.get_trace(trace_id)
+    if not trace:
+        return None
+    
+    # 获取关联的 Langfuse 事件
+    events = get_langfuse_events(trace_id=trace_id)
+    trace['events'] = events
+    
+    # 计算汇总指标
+    total_tokens = sum(e.get('total_tokens') or 0 for e in events)
+    total_latency = sum(e.get('latency_ms') or 0 for e in events)
+    models_used = list(set(e.get('model') for e in events if e.get('model')))
+    
+    trace['observability'] = {
+        'total_tokens': total_tokens,
+        'total_latency_ms': total_latency,
+        'models_used': models_used,
+        'event_count': len(events)
+    }
+    
+    return trace
+
+
+# ==========================================
 # 测试入口
 # ==========================================
 
@@ -459,3 +608,4 @@ if __name__ == '__main__':
     
     handle_trace_create(test_trace_body, datetime.now().isoformat())
     print("✅ Test completed!")
+

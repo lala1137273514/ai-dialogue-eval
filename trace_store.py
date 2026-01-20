@@ -56,11 +56,33 @@ def init_db():
             FOREIGN KEY (trace_id) REFERENCES traces(trace_id)
         );
         
+        -- 🆕 Langfuse Events 表: 保存原始 Langfuse 事件用于可观测性展示
+        CREATE TABLE IF NOT EXISTS langfuse_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id TEXT UNIQUE,
+            event_type TEXT,
+            trace_id TEXT,
+            parent_id TEXT,
+            name TEXT,
+            raw_body TEXT,
+            model TEXT,
+            input_tokens INTEGER,
+            output_tokens INTEGER,
+            total_tokens INTEGER,
+            latency_ms INTEGER,
+            start_time TEXT,
+            end_time TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (trace_id) REFERENCES traces(trace_id)
+        );
+        
         -- 创建索引
         CREATE INDEX IF NOT EXISTS idx_traces_session ON traces(session_id);
         CREATE INDEX IF NOT EXISTS idx_traces_type ON traces(eval_type);
         CREATE INDEX IF NOT EXISTS idx_scores_trace ON scores(trace_id);
         CREATE INDEX IF NOT EXISTS idx_traces_created ON traces(created_at);
+        CREATE INDEX IF NOT EXISTS idx_langfuse_events_trace ON langfuse_events(trace_id);
+        CREATE INDEX IF NOT EXISTS idx_langfuse_events_type ON langfuse_events(event_type);
     """)
     conn.commit()
     return conn

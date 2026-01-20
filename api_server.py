@@ -70,6 +70,32 @@ def list_projects():
     }), 200
 
 
+# 🆕 Langfuse 事件查询 API (可观测性数据)
+@app.route('/api/v1/langfuse/events', methods=['GET'])
+def get_langfuse_events_api():
+    """获取原始 Langfuse 事件列表"""
+    from langfuse_adapter import get_langfuse_events
+    
+    trace_id = request.args.get('trace_id')
+    event_type = request.args.get('event_type')
+    limit = int(request.args.get('limit', 50))
+    
+    events = get_langfuse_events(trace_id=trace_id, event_type=event_type, limit=limit)
+    return jsonify({
+        'events': events,
+        'count': len(events)
+    })
+
+
+@app.route('/api/v1/langfuse/trace/<trace_id>', methods=['GET'])
+def get_trace_with_events_api(trace_id):
+    """获取 Trace 详情 + 关联的 Langfuse 事件（融合数据）"""
+    from langfuse_adapter import get_trace_with_events
+    
+    trace = get_trace_with_events(trace_id)
+    if not trace:
+        return jsonify({'error': 'Trace not found'}), 404
+    return jsonify(trace)
 
 
 @app.route('/api/v1/health', methods=['GET'])
