@@ -25,10 +25,35 @@ from unified_eval import run_unified_evaluation, detect_evaluation_type
 from langfuse_adapter import langfuse_bp
 
 app = Flask(__name__)
-CORS(app)  # 允许跨域
+CORS(app, resources={r"/*": {"origins": "*"}})  # 允许跨域
+
+@app.before_request
+def log_request_info():
+    print(f"📡 [Request] {request.method} {request.url}")
+    # print(f"   Headers: {dict(request.headers)}")
 
 # 🆕 注册 Langfuse 兼容 API (支持 Dify 集成)
 app.register_blueprint(langfuse_bp)
+
+# 添加一个根路径重定向或提示，防止直接访问根目录 404
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        "service": "AI Dialogue Eval API",
+        "status": "running",
+        "version": "0.5.0",
+        "endpoints": [
+            "/api/public/health",
+            "/api/public/ingestion",
+            "/api/v1/traces"
+        ]
+    })
+
+# 补充 Dify 可能探测的路径
+@app.route('/api/public/auth', methods=['GET', 'POST'])
+def auth_check():
+    return jsonify({"status": "ok"}), 200
+
 
 
 @app.route('/api/v1/health', methods=['GET'])
