@@ -21,8 +21,14 @@ from agent_eval import evaluate_agent_from_dict, AgentTrace
 from trace_store import TraceStore
 from unified_eval import run_unified_evaluation, detect_evaluation_type
 
+# 🆕 导入 Langfuse 适配器
+from langfuse_adapter import langfuse_bp
+
 app = Flask(__name__)
 CORS(app)  # 允许跨域
+
+# 🆕 注册 Langfuse 兼容 API (支持 Dify 集成)
+app.register_blueprint(langfuse_bp)
 
 
 @app.route('/api/v1/health', methods=['GET'])
@@ -201,5 +207,14 @@ if __name__ == '__main__':
     print("   POST /api/v1/eval/unified - 统一评测")
     print("   GET  /api/v1/traces       - 列出 Trace")
     print("   GET  /api/v1/stats        - 统计数据")
+    print("")
+    print("🔌 Langfuse 兼容 (Dify 集成):")
+    print("   POST /api/public/ingestion - Langfuse 格式数据摄入")
+    print("   GET  /api/public/health    - 健康检查")
+    print("")
+    print("📋 Dify 配置信息:")
+    print("   公钥: pk-eval-platform")
+    print("   密钥: sk-eval-platform-secret-key-2024")
+    print("   Host: http://localhost:5000")
     print("")
     app.run(host='0.0.0.0', port=5000, debug=True)

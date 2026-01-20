@@ -2375,7 +2375,7 @@ elif current_page == 'settings':
     # 确保默认评估器存在
     EvaluatorStore.ensure_default_evaluator()
     
-    tab_evaluator, tab_rubric, tab_prompt = st.tabs(["🧪 评估器管理", "🛠️ 评分维度", "🎨 Prompt 模板"])
+    tab_evaluator, tab_rubric, tab_prompt, tab_langfuse = st.tabs(["🧪 评估器管理", "🛠️ 评分维度", "🎨 Prompt 模板", "🔌 Langfuse 集成"])
     
     # ==========================================
     # Tab 1: 评估器管理 (🆕 v1.0.0)
@@ -2737,6 +2737,148 @@ elif current_page == 'settings':
         """, language="text")
         
         st.info("Prompt 模板编辑功能开发中...")
+
+    # ==========================================
+    # Tab 4: Langfuse 集成配置 (🆕 Dify 集成)
+    # ==========================================
+    with tab_langfuse:
+        st.markdown("### 🔌 Langfuse 兼容 API 配置")
+        st.caption("通过 Langfuse 兼容 API，将 Dify 或其他 LLM 平台的 trace 数据接入评测系统。")
+        
+        # 导入 langfuse_adapter 模块
+        try:
+            from langfuse_adapter import API_KEYS, add_api_key, remove_api_key, list_api_keys
+            adapter_available = True
+        except ImportError:
+            adapter_available = False
+            st.error("⚠️ langfuse_adapter 模块未找到，请检查文件是否存在。")
+        
+        if adapter_available:
+            # 服务状态
+            st.markdown("#### 📡 服务状态")
+            
+            status_col1, status_col2, status_col3 = st.columns(3)
+            with status_col1:
+                st.markdown('''
+                <div class="metric-card">
+                    <div class="metric-value">🟢</div>
+                    <div class="metric-label">API 就绪</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            with status_col2:
+                st.markdown(f'''
+                <div class="metric-card">
+                    <div class="metric-value">{len(list_api_keys())}</div>
+                    <div class="metric-label">活跃密钥</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            with status_col3:
+                st.markdown('''
+                <div class="metric-card">
+                    <div class="metric-value">5000</div>
+                    <div class="metric-label">监听端口</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            
+            # API 密钥管理
+            st.markdown("#### 🔑 API 密钥管理")
+            
+            # 当前密钥列表
+            current_keys = list_api_keys()
+            if current_keys:
+                st.markdown("**已配置的密钥:**")
+                for pk in current_keys:
+                    key_col1, key_col2 = st.columns([4, 1])
+                    with key_col1:
+                        st.code(f"公钥: {pk}", language=None)
+                    with key_col2:
+                        if pk != "pk-eval-platform":  # 保护默认密钥
+                            if st.button("🗑️", key=f"del_{pk}", help="删除此密钥"):
+                                remove_api_key(pk)
+                                st.success(f"已删除密钥: {pk}")
+                                st.rerun()
+            else:
+                st.info("暂无配置的 API 密钥")
+            
+            # 添加新密钥
+            with st.expander("➕ 添加新密钥"):
+                new_pk = st.text_input("公钥 (Public Key)", placeholder="pk-your-project")
+                new_sk = st.text_input("密钥 (Secret Key)", placeholder="sk-your-secret-key", type="password")
+                
+                if st.button("添加密钥", type="primary"):
+                    if new_pk and new_sk:
+                        if new_pk.startswith("pk-") and new_sk.startswith("sk-"):
+                            add_api_key(new_pk, new_sk)
+                            st.success(f"✅ 密钥已添加: {new_pk}")
+                            st.rerun()
+                        else:
+                            st.error("公钥应以 'pk-' 开头，密钥应以 'sk-' 开头")
+                    else:
+                        st.warning("请填写公钥和密钥")
+            
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            
+            # Dify 配置指南
+            st.markdown("#### 📋 Dify 配置指南")
+            
+            with st.expander("🔧 如何在 Dify 中配置", expanded=True):
+                st.markdown("""
+**步骤 1: 打开 Dify 应用设置**
+- 进入您的 Dify 应用 → 监控 (Tracing)
+
+**步骤 2: 添加 Langfuse 提供者**
+- 选择 Langfuse 作为追踪提供者
+
+**步骤 3: 填写配置**
+""")
+                st.code(f"""
+Secret Key: sk-eval-platform-secret-key-2024
+Public Key: pk-eval-platform
+Host: http://your-server-ip:5000
+""", language="text")
+                
+                st.info("💡 将 `your-server-ip` 替换为运行此服务的机器 IP 地址")
+            
+            # 连接测试
+            st.markdown("#### 🧪 连接测试")
+            
+            test_col1, test_col2 = st.columns([2, 1])
+            with test_col1:
+                test_host = st.text_input("测试地址", value="http://localhost:5000", key="test_host")
+            with test_col2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🔍 测试连接", use_container_width=True):
+                    import requests
+                    try:
+                        resp = requests.get(f"{test_host}/api/public/health", timeout=5)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            st.success(f"✅ 连接成功! 版本: {data.get('version', 'unknown')}")
+                        else:
+                            st.error(f"❌ 连接失败: HTTP {resp.status_code}")
+                    except requests.exceptions.ConnectionError:
+                        st.error("❌ 无法连接到服务，请确认 API Server 已启动")
+                    except Exception as e:
+                        st.error(f"❌ 连接错误: {e}")
+            
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            
+            # API 端点参考
+            st.markdown("#### 📚 API 端点参考")
+            
+            st.markdown("""
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/public/ingestion` | POST | Langfuse 兼容数据摄入 |
+| `/api/public/health` | GET | 健康检查 |
+| `/api/v1/traces` | GET | 查询 Trace 记录 |
+| `/api/v1/stats` | GET | 获取统计数据 |
+""")
+
+
+
 
 
 # ==========================================
