@@ -2883,6 +2883,58 @@ Host: http://your-server-ip:5000
 | `/api/v1/traces` | GET | 查询 Trace 记录 |
 | `/api/v1/stats` | GET | 获取统计数据 |
 """)
+            
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            
+            # 🆕 远程 Traces 查看
+            st.markdown("#### 📊 Dify Traces 数据")
+            
+            api_url = st.text_input("API 服务地址", value="https://ai-dialogue-eval-api.zeabur.app", key="traces_api_url")
+            
+            col_fetch, col_limit = st.columns([1, 1])
+            with col_limit:
+                trace_limit = st.selectbox("显示条数", [10, 20, 50, 100], index=0)
+            with col_fetch:
+                st.markdown("<br>", unsafe_allow_html=True)
+                fetch_traces = st.button("🔄 获取 Traces", use_container_width=True)
+            
+            if fetch_traces:
+                import requests
+                try:
+                    resp = requests.get(f"{api_url}/api/v1/traces", params={"limit": trace_limit}, timeout=10)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        traces = data.get('traces', [])
+                        if traces:
+                            st.success(f"✅ 获取到 {len(traces)} 条 Traces (共 {data.get('total', '?')} 条)")
+                            
+                            # 显示 traces 表格
+                            import pandas as pd
+                            trace_rows = []
+                            for t in traces:
+                                trace_rows.append({
+                                    "ID": t.get('id', '')[:8],
+                                    "会话ID": (t.get('session_id') or '')[:20],
+                                    "输入": (t.get('input') or '')[:50] + "...",
+                                    "输出": (t.get('output') or '')[:50] + "...",
+                                    "评分": t.get('avg_score', '-'),
+                                    "时间": t.get('created_at', '')[:19]
+                                })
+                            
+                            df = pd.DataFrame(trace_rows)
+                            st.dataframe(df, use_container_width=True, hide_index=True)
+                            
+                            # 详情展开
+                            with st.expander("📄 查看完整 JSON"):
+                                st.json(traces)
+                        else:
+                            st.info("暂无 Traces 数据")
+                    else:
+                        st.error(f"❌ 获取失败: HTTP {resp.status_code}")
+                except requests.exceptions.ConnectionError:
+                    st.error("❌ 无法连接到 API 服务")
+                except Exception as e:
+                    st.error(f"❌ 错误: {e}")
 
 
 
