@@ -201,6 +201,9 @@ def detect_type():
 
 
 if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    
     print("🚀 Starting KST Agent Evaluation API Server...")
     print("📍 Endpoints:")
     print("   POST /api/v1/eval/agent   - Agent 评测")
@@ -215,6 +218,7 @@ if __name__ == '__main__':
     print("📋 Dify 配置信息:")
     print("   公钥: pk-eval-platform")
     print("   密钥: sk-eval-platform-secret-key-2024")
-    print("   Host: http://localhost:5000")
+    print(f"   Host: http://localhost:{port}")
     print("")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=(port == 5000))
+
