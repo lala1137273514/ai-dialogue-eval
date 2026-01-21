@@ -229,23 +229,43 @@ def handle_trace_create(body: Dict, timestamp: str, dify_app: Dict = None):
     
     print(f"[Langfuse Adapter] ✅ Trace created: {created_trace_id} (Dify: {trace_id})")
     
-    # 🆕 如果匹配到 App，存入评测集
-    if dify_app and input_data and output_data:
+    # 🆕 将数据存入评测集（支持静态凭证和App凭证）
+    if input_data and output_data:
         try:
             from dify_store import DifyStore
             import json
             
-            # 获取 App 关联的固定评测集
-            datasets = DifyStore.list_datasets(app_id=dify_app['id'])
-            if datasets:
-                dataset_id = datasets[0]['id']  # 使用第一个（也是唯一的）关联评测集
+            dataset_id = None
+            dataset_name = None
+            
+            if dify_app:
+                # App 独立凭证：使用 App 关联的评测集
+                datasets = DifyStore.list_datasets(app_id=dify_app['id'])
+                if datasets:
+                    dataset_id = datasets[0]['id']
+                    dataset_name = datasets[0]['name']
+                else:
+                    dataset_id = DifyStore.create_dataset(
+                        name=f"{dify_app['name']}-评测集",
+                        app_id=dify_app['id'],
+                        source_type='dify'
+                    )
+                    dataset_name = f"{dify_app['name']}-评测集"
             else:
-                # 如果没有评测集（旧数据），创建一个
-                dataset_id = DifyStore.create_dataset(
-                    name=f"{dify_app['name']}-评测集",
-                    app_id=dify_app['id'],
-                    source_type='dify'
-                )
+                # 静态凭证：使用默认评测集
+                datasets = DifyStore.list_datasets()
+                # 查找或创建默认评测集
+                default_ds = next((d for d in datasets if d['name'] == 'Dify-默认评测集'), None)
+                if default_ds:
+                    dataset_id = default_ds['id']
+                    dataset_name = default_ds['name']
+                else:
+                    dataset_id = DifyStore.create_dataset(
+                        name='Dify-默认评测集',
+                        source_type='dify',
+                        description='静态凭证数据的默认存储评测集'
+                    )
+                    dataset_name = 'Dify-默认评测集'
             
             # 存入记录
             record_id = DifyStore.add_record(
@@ -258,14 +278,12 @@ def handle_trace_create(body: Dict, timestamp: str, dify_app: Dict = None):
                 dify_conversation_id=session_id
             )
             
-            print(f"[Langfuse Adapter] 💾 Record saved to dataset: {dataset_id}, record: {record_id}")
+            print(f"[Langfuse Adapter] 💾 Record saved to dataset '{dataset_name}': {record_id}")
             
         except Exception as e:
             print(f"[Langfuse Adapter] ⚠️ Failed to save to dataset: {e}")
-    
-    # 如果没有匹配 App，使用旧的自动评测逻辑
-    elif input_data and output_data:
-        trigger_auto_evaluation(created_trace_id, input_data, output_data)
+            # 回退到旧逻辑
+            trigger_auto_evaluation(created_trace_id, input_data, output_data)
 
 
 def handle_generation_create(body: Dict, timestamp: str):
