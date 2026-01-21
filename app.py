@@ -3176,19 +3176,18 @@ elif current_page == 'dify_management':
                         st.markdown(f"**描述**: {app.get('description', '无')}")
                         st.markdown(f"**创建时间**: {app.get('created_at', 'N/A')}")
                         
-                        # 🆕 显示凭证信息（供配置到 Dify）
-                        if app.get('public_key') and app.get('secret_key'):
-                            st.markdown("---")
-                            st.markdown("#### 🔑 Dify 配置凭证")
-                            st.caption("将以下信息填入 Dify 的 Langfuse 集成配置中")
-                            
-                            # 获取当前 Host
-                            import os
-                            api_host = os.environ.get('API_HOST', 'http://localhost:5000')
-                            
-                            st.code(f"Public Key: {app['public_key']}", language="text")
-                            st.code(f"Secret Key: {app['secret_key']}", language="text")
-                            st.code(f"Host: {api_host}", language="text")
+                        # 🆕 显示统一静态凭证（供配置到 Dify）
+                        st.markdown("---")
+                        st.markdown("#### 🔑 Dify Langfuse 配置")
+                        st.caption("所有工作流统一使用以下凭证，数据将按工作流名称自动区分")
+                        
+                        # 获取当前 Host
+                        import os
+                        api_host = os.environ.get('API_HOST', 'https://ai-dialogue-eval-api.zeabur.app')
+                        
+                        st.code("Public Key: pk-eval-platform", language="text")
+                        st.code("Secret Key: sk-eval-platform-secret-key-2024", language="text")
+                        st.code(f"Host: {api_host}", language="text")
                         
                         # 操作按钮
                         col_dataset, col_test, col_del = st.columns(3)
