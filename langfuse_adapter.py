@@ -48,7 +48,7 @@ langfuse_bp = Blueprint('langfuse', __name__, url_prefix='/api/public')
 # ==========================================
 
 def basic_auth_required(f):
-    """HTTP Basic Auth 认证装饰器"""
+    """HTTP Basic Auth 认证装饰器，支持 App 独立凭证"""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get('Authorization', '')
@@ -64,13 +64,24 @@ def basic_auth_required(f):
             credentials = base64.b64decode(auth_header[6:]).decode('utf-8')
             public_key, secret_key = credentials.split(':', 1)
             
-            # 验证密钥
+            # 首先检查静态密钥（向后兼容）
             expected_secret = API_KEYS.get(public_key)
-            if not expected_secret or expected_secret != secret_key:
-                return jsonify({
-                    "error": "Unauthorized", 
-                    "message": "Invalid API credentials"
-                }), 401
+            if expected_secret and expected_secret == secret_key:
+                # 静态密钥验证通过，设置默认 App
+                request.dify_app = None
+                return f(*args, **kwargs)
+            
+            # 然后检查 DifyStore 中的 App 凭证
+            from dify_store import DifyStore
+            app = DifyStore.get_app_by_credentials(public_key, secret_key)
+            if app:
+                request.dify_app = app  # 将 App 信息附加到请求
+                return f(*args, **kwargs)
+            
+            return jsonify({
+                "error": "Unauthorized", 
+                "message": "Invalid API credentials"
+            }), 401
                 
         except Exception as e:
             return jsonify({
@@ -78,7 +89,6 @@ def basic_auth_required(f):
                 "message": f"Invalid authorization header: {str(e)}"
             }), 401
         
-        return f(*args, **kwargs)
     return decorated
 
 
@@ -136,8 +146,11 @@ def ingestion():
         body = event.get('body', {})
         
         try:
+            # 获取请求中的 App 信息（由认证装饰器设置）
+            dify_app = getattr(request, 'dify_app', None)
+            
             if event_type == 'trace-create':
-                handle_trace_create(body, timestamp)
+                handle_trace_create(body, timestamp, dify_app)
             elif event_type == 'generation-create':
                 handle_generation_create(body, timestamp)
             elif event_type == 'generation-update':
@@ -174,11 +187,12 @@ def ingestion():
 # 事件处理器
 # ==========================================
 
-def handle_trace_create(body: Dict, timestamp: str):
+def handle_trace_create(body: Dict, timestamp: str, dify_app: Dict = None):
     """
     处理 trace-create 事件
     
     Dify 发送的 trace 包含完整的对话信息
+    如果匹配到 App，则存入对应的评测集
     """
     trace_id = body.get('id', f"dify_{int(time.time())}")
     session_id = body.get('sessionId', body.get('id', 'dify_session'))
@@ -190,7 +204,7 @@ def handle_trace_create(body: Dict, timestamp: str):
     metadata = body.get('metadata', {})
     tags = body.get('tags', [])
     
-    # 创建 Trace
+    # 创建 Trace（保留原有逻辑）
     created_trace_id = TraceStore.create_trace(
         session_id=session_id,
         name=name,
@@ -215,8 +229,42 @@ def handle_trace_create(body: Dict, timestamp: str):
     
     print(f"[Langfuse Adapter] ✅ Trace created: {created_trace_id} (Dify: {trace_id})")
     
-    # 如果有 input 和 output，自动触发评测
-    if input_data and output_data:
+    # 🆕 如果匹配到 App，存入评测集
+    if dify_app and input_data and output_data:
+        try:
+            from dify_store import DifyStore
+            import json
+            
+            # 获取 App 关联的固定评测集
+            datasets = DifyStore.list_datasets(app_id=dify_app['id'])
+            if datasets:
+                dataset_id = datasets[0]['id']  # 使用第一个（也是唯一的）关联评测集
+            else:
+                # 如果没有评测集（旧数据），创建一个
+                dataset_id = DifyStore.create_dataset(
+                    name=f"{dify_app['name']}-评测集",
+                    app_id=dify_app['id'],
+                    source_type='dify'
+                )
+            
+            # 存入记录
+            record_id = DifyStore.add_record(
+                dataset_id=dataset_id,
+                inputs=json.dumps({'input': input_data}, ensure_ascii=False) if isinstance(input_data, str) else json.dumps(input_data, ensure_ascii=False),
+                query=input_data if isinstance(input_data, str) else str(input_data),
+                output=output_data if isinstance(output_data, str) else str(output_data),
+                source='dify_realtime',
+                dify_trace_id=trace_id,
+                dify_conversation_id=session_id
+            )
+            
+            print(f"[Langfuse Adapter] 💾 Record saved to dataset: {dataset_id}, record: {record_id}")
+            
+        except Exception as e:
+            print(f"[Langfuse Adapter] ⚠️ Failed to save to dataset: {e}")
+    
+    # 如果没有匹配 App，使用旧的自动评测逻辑
+    elif input_data and output_data:
         trigger_auto_evaluation(created_trace_id, input_data, output_data)
 
 

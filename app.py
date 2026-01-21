@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 import base64
+import time as time_module
 from pathlib import Path
 from run_eval import run_log_evaluation, generate_session_summary, generate_markdown_report, generate_json_report
 from agent import RealAgent
@@ -431,13 +432,31 @@ with st.sidebar:
         st.session_state['current_page'] = 'eval_center'
         st.rerun()
     
-    # 3. 数据浏览 (整合日志 + Trace + 历史 + 低分)
+    # 🆕 3. Dify 管理
+    if st.button("🔌 Dify 管理", use_container_width=True,
+                 type="primary" if st.session_state['current_page'] == 'dify_management' else "secondary"):
+        st.session_state['current_page'] = 'dify_management'
+        st.rerun()
+    
+    # 🆕 4. 评测管理
+    if st.button("📋 评测管理", use_container_width=True,
+                 type="primary" if st.session_state['current_page'] == 'eval_dataset_management' else "secondary"):
+        st.session_state['current_page'] = 'eval_dataset_management'
+        st.rerun()
+    
+    # 🆕 5. 报告中心
+    if st.button("📝 报告中心", use_container_width=True,
+                 type="primary" if st.session_state['current_page'] == 'report_center' else "secondary"):
+        st.session_state['current_page'] = 'report_center'
+        st.rerun()
+    
+    # 6. 数据浏览 (整合日志 + Trace + 历史 + 低分)
     if st.button("📜 数据浏览", use_container_width=True,
                  type="primary" if st.session_state['current_page'] == 'data_explorer' else "secondary"):
         st.session_state['current_page'] = 'data_explorer'
         st.rerun()
     
-    # 4. 系统设置 (整合 rubric + prompt)
+    # 7. 系统设置 (整合 rubric + prompt)
     if st.button("⚙️ 系统设置", use_container_width=True,
                  type="primary" if st.session_state['current_page'] == 'settings' else "secondary"):
         st.session_state['current_page'] = 'settings'
@@ -3080,6 +3099,898 @@ if st.session_state.get('show_demo', False):
     
     # 页面顶部也显示当前步骤提示
     st.info(f"🎬 **演示模式** [{step_idx + 1}/{total_steps}] {step['title']} - {step['desc']}")
+
+# ==========================================
+# 🆕 Dify 管理页面
+# ==========================================
+elif current_page == 'dify_management':
+    st.markdown('<h1 class="main-title">🔌 Dify 管理</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">管理 Dify 工作流应用 | 在线测试 | 批量测试</p>', unsafe_allow_html=True)
+    
+    from dify_store import DifyStore
+    from dify_client import DifyClient
+    
+    tab_apps, tab_playground, tab_batch = st.tabs(["📱 App 列表", "🎮 Playground", "📦 批量测试"])
+    
+    # ========== Tab 1: App 列表 ==========
+    with tab_apps:
+        st.markdown("### 📱 Dify App 管理")
+        
+        # 操作按钮
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("➕ 添加 App", use_container_width=True, type="primary"):
+                st.session_state['dify_app_mode'] = 'create'
+                st.rerun()
+        
+        app_mode = st.session_state.get('dify_app_mode', 'list')
+        
+        # 创建模式
+        if app_mode == 'create':
+            st.markdown("---")
+            st.markdown("#### ➕ 添加新 App")
+            
+            with st.form("create_app_form"):
+                name = st.text_input("App 名称", placeholder="如：客服质量检测工作流")
+                dify_host = st.text_input("Dify Host", value="https://api.dify.ai", placeholder="https://api.dify.ai")
+                api_key = st.text_input("API Key", type="password", placeholder="app-xxx")
+                app_type = st.selectbox("App 类型", ["chat", "workflow"])
+                description = st.text_area("描述", placeholder="描述此工作流的用途")
+                
+                col_save, col_cancel = st.columns(2)
+                with col_save:
+                    submitted = st.form_submit_button("💾 保存", type="primary", use_container_width=True)
+                with col_cancel:
+                    if st.form_submit_button("取消", use_container_width=True):
+                        st.session_state['dify_app_mode'] = 'list'
+                        st.rerun()
+                
+                if submitted:
+                    if name and api_key:
+                        app_id = DifyStore.create_app(
+                            name=name,
+                            dify_host=dify_host,
+                            api_key=api_key,
+                            app_type=app_type,
+                            description=description
+                        )
+                        st.success(f"✅ App 创建成功! ID: {app_id}")
+                        st.session_state['dify_app_mode'] = 'list'
+                        st.rerun()
+                    else:
+                        st.error("请填写 App 名称和 API Key")
+        
+        # 列表模式
+        else:
+            apps = DifyStore.list_apps()
+            
+            if not apps:
+                st.info("暂无 Dify App，请点击「添加 App」创建")
+            else:
+                st.markdown(f"**共 {len(apps)} 个 App:**")
+                
+                for app in apps:
+                    with st.expander(f"📱 {app['name']} ({app['app_type']})"):
+                        st.markdown(f"**ID**: `{app['id']}`")
+                        st.markdown(f"**Host**: {app['dify_host']}")
+                        st.markdown(f"**描述**: {app.get('description', '无')}")
+                        st.markdown(f"**创建时间**: {app.get('created_at', 'N/A')}")
+                        
+                        # 🆕 显示凭证信息（供配置到 Dify）
+                        if app.get('public_key') and app.get('secret_key'):
+                            st.markdown("---")
+                            st.markdown("#### 🔑 Dify 配置凭证")
+                            st.caption("将以下信息填入 Dify 的 Langfuse 集成配置中")
+                            
+                            # 获取当前 Host
+                            import os
+                            api_host = os.environ.get('API_HOST', 'http://localhost:5000')
+                            
+                            st.code(f"Public Key: {app['public_key']}", language="text")
+                            st.code(f"Secret Key: {app['secret_key']}", language="text")
+                            st.code(f"Host: {api_host}", language="text")
+                        
+                        # 操作按钮
+                        col_dataset, col_test, col_del = st.columns(3)
+                        
+                        # 🆕 打开评测集按钮
+                        with col_dataset:
+                            datasets = DifyStore.list_datasets(app_id=app['id'])
+                            if datasets:
+                                if st.button("📋 打开评测集", key=f"dataset_{app['id']}", type="primary"):
+                                    st.session_state['selected_dataset'] = datasets[0]['id']
+                                    st.session_state['current_page'] = 'eval_dataset_management'
+                                    st.rerun()
+                            else:
+                                st.caption("暂无评测集")
+                        
+                        with col_test:
+                            if st.button("🔗 测试Dify", key=f"test_{app['id']}"):
+                                client = DifyClient(app['dify_host'], app['api_key'])
+                                result = client.test_connection()
+                                if result['success']:
+                                    st.success("→ Dify 连接正常")
+                                else:
+                                    st.error(result['message'])
+                        with col_del:
+                            if st.button("🗑️ 删除", key=f"del_{app['id']}"):
+                                DifyStore.delete_app(app['id'])
+                                st.success("已删除")
+                                st.rerun()
+                        
+                        # 🆕 测试回传按钮（单独一行）
+                        if app.get('public_key') and app.get('secret_key'):
+                            if st.button("📡 测试回传", key=f"test_callback_{app['id']}", help="模拟 Dify 发送数据到平台"):
+                                import requests
+                                import base64
+                                import os
+                                
+                                # 构造认证头
+                                credentials = f"{app['public_key']}:{app['secret_key']}"
+                                auth_header = base64.b64encode(credentials.encode()).decode()
+                                
+                                # 平台 API 地址
+                                api_host = os.environ.get('API_HOST', 'http://localhost:5000')
+                                
+                                # 模拟 Dify 发送的数据
+                                test_payload = {
+                                    "batch": [{
+                                        "id": f"test-{app['id']}-{int(time_module.time())}",
+                                        "type": "trace-create",
+                                        "timestamp": datetime.now().isoformat(),
+                                        "body": {
+                                            "id": f"dify-test-{int(time_module.time())}",
+                                            "name": f"测试回传 - {app['name']}",
+                                            "input": "这是一条测试消息",
+                                            "output": "这是测试回复，用于验证回传链路是否正常。",
+                                            "userId": "test_user"
+                                        }
+                                    }]
+                                }
+                                
+                                try:
+                                    response = requests.post(
+                                        f"{api_host}/api/public/ingestion",
+                                        json=test_payload,
+                                        headers={
+                                            "Authorization": f"Basic {auth_header}",
+                                            "Content-Type": "application/json"
+                                        },
+                                        timeout=10
+                                    )
+                                    
+                                    if response.status_code in [200, 207]:
+                                        st.success("✅ 回传测试成功！数据已存入评测集")
+                                        st.json(response.json())
+                                    else:
+                                        st.error(f"❌ 回传失败: {response.status_code} - {response.text}")
+                                except requests.exceptions.ConnectionError:
+                                    st.error("❌ 无法连接到 API 服务器，请确保 Flask 服务已启动")
+                                except Exception as e:
+                                    st.error(f"❌ 测试失败: {str(e)}")
+    
+    # ========== Tab 2: Playground ==========
+    with tab_playground:
+        st.markdown("### 🎮 Playground 在线测试")
+        st.caption("选择一个 App，填写入参，实时调用 Dify 并查看结果")
+        
+        apps = DifyStore.list_apps()
+        if not apps:
+            st.warning("请先在「App 列表」中添加 Dify App")
+        else:
+            selected_app = st.selectbox(
+                "选择 App",
+                apps,
+                format_func=lambda x: f"{x['name']} ({x['app_type']})"
+            )
+            
+            if selected_app:
+                client = DifyClient(selected_app['dify_host'], selected_app['api_key'])
+                
+                # 获取入参定义
+                with st.spinner("加载入参定义..."):
+                    fields = client.get_input_form_fields()
+                
+                if not fields:
+                    st.info("此 App 无需额外输入参数，直接发送查询即可")
+                    fields = []
+                
+                st.markdown("---")
+                st.markdown("#### 📝 输入参数")
+                
+                # 动态生成表单
+                inputs = {}
+                for field in fields:
+                    label = f"{field['label']} {'*' if field.get('required') else ''}"
+                    var = field['variable']
+                    
+                    if field['type'] == 'paragraph':
+                        inputs[var] = st.text_area(label, value=field.get('default', ''), key=f"input_{var}")
+                    elif field['type'] == 'select' and field.get('options'):
+                        inputs[var] = st.selectbox(label, field['options'], key=f"input_{var}")
+                    elif field['type'] == 'number':
+                        inputs[var] = st.number_input(label, value=field.get('default', 0), key=f"input_{var}")
+                    else:
+                        inputs[var] = st.text_input(label, value=field.get('default', ''), key=f"input_{var}")
+                
+                # 查询输入
+                query = st.text_area("用户问题 / Query", placeholder="输入您的问题...", key="playground_query")
+                
+                # 发送按钮
+                if st.button("🚀 发送", type="primary", use_container_width=True):
+                    if query or inputs:
+                        with st.spinner("调用 Dify API..."):
+                            if selected_app['app_type'] == 'workflow':
+                                # 工作流模式
+                                all_inputs = {**inputs}
+                                if query:
+                                    all_inputs['query'] = query
+                                result = client.run_workflow(all_inputs)
+                            else:
+                                # 对话模式
+                                result = client.chat(query, inputs)
+                        
+                        if 'error' in result:
+                            st.error(f"调用失败: {result['error']}")
+                        else:
+                            st.markdown("---")
+                            st.markdown("#### 📤 响应结果")
+                            
+                            # 提取输出
+                            if selected_app['app_type'] == 'workflow':
+                                output = result.get('data', {}).get('outputs', {})
+                                st.json(output)
+                            else:
+                                answer = result.get('answer', '')
+                                st.success(answer)
+                            
+                            # 保存到评测集
+                            with st.expander("💾 保存到评测集"):
+                                datasets = DifyStore.list_datasets(app_id=selected_app['id'])
+                                if datasets:
+                                    ds = st.selectbox("选择评测集", datasets, format_func=lambda x: x['name'])
+                                    if st.button("保存"):
+                                        DifyStore.add_record(
+                                            dataset_id=ds['id'],
+                                            inputs=json.dumps(inputs, ensure_ascii=False),
+                                            query=query,
+                                            output=str(result.get('answer', result.get('data', {}).get('outputs', ''))),
+                                            source="playground"
+                                        )
+                                        st.success("已保存到评测集")
+                                else:
+                                    st.info("请先在「评测管理」中创建评测集")
+                    else:
+                        st.warning("请输入问题或填写参数")
+    
+    # ========== Tab 3: 批量测试 ==========
+    with tab_batch:
+        st.markdown("### 📦 批量测试")
+        st.caption("上传 Excel 批量调用 Dify 工作流，自动保存结果到评测集")
+        
+        apps = DifyStore.list_apps()
+        if not apps:
+            st.warning("请先在「App 列表」中添加 Dify App")
+        else:
+            selected_app = st.selectbox(
+                "选择 App",
+                apps,
+                format_func=lambda x: f"{x['name']} ({x['app_type']})",
+                key="batch_app_select"
+            )
+            
+            if selected_app:
+                client = DifyClient(selected_app['dify_host'], selected_app['api_key'])
+                
+                # 获取入参定义
+                fields = client.get_input_form_fields()
+                
+                st.markdown("---")
+                
+                # Step 1: 生成模板
+                st.markdown("#### 📥 Step 1: 下载模板")
+                
+                if fields:
+                    st.markdown(f"此 App 共有 **{len(fields)}** 个输入参数")
+                    
+                    # 生成模板
+                    import pandas as pd
+                    template_data = {}
+                    for field in fields:
+                        template_data[field['variable']] = [f"示例_{field.get('label', field['variable'])}"]
+                    template_data['query'] = ["您的问题"]
+                    
+                    template_df = pd.DataFrame(template_data)
+                    
+                    # 显示模板预览
+                    st.dataframe(template_df, use_container_width=True)
+                    
+                    # 下载按钮
+                    csv_data = template_df.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button(
+                        label="📥 下载 CSV 模板",
+                        data=csv_data,
+                        file_name=f"batch_template_{selected_app['name']}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info("此 App 无需额外参数，只需提供 query 列")
+                    template_df = pd.DataFrame({"query": ["问题1", "问题2"]})
+                    st.dataframe(template_df)
+                    csv_data = template_df.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button("📥 下载模板", csv_data, "batch_template.csv", "text/csv")
+                
+                st.markdown("---")
+                
+                # Step 2: 上传文件
+                st.markdown("#### 📤 Step 2: 上传测试数据")
+                
+                uploaded_file = st.file_uploader(
+                    "上传 CSV 或 Excel 文件",
+                    type=['csv', 'xlsx', 'xls'],
+                    key="batch_file_upload"
+                )
+                
+                if uploaded_file:
+                    # 解析文件
+                    try:
+                        if uploaded_file.name.endswith('.csv'):
+                            df = pd.read_csv(uploaded_file)
+                        else:
+                            df = pd.read_excel(uploaded_file)
+                        
+                        st.success(f"✅ 文件解析成功！共 {len(df)} 行数据")
+                        st.dataframe(df.head(5), use_container_width=True)
+                        
+                        st.markdown("---")
+                        
+                        # Step 3: 配置执行
+                        st.markdown("#### ⚙️ Step 3: 配置执行")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            concurrency = st.slider("并发数", min_value=1, max_value=10, value=3)
+                        with col2:
+                            auto_eval = st.checkbox("执行后自动评测", value=False)
+                        
+                        # 选择或创建评测集
+                        datasets = DifyStore.list_datasets(app_id=selected_app['id'])
+                        create_new = st.checkbox("创建新评测集", value=not datasets)
+                        
+                        if create_new:
+                            new_ds_name = st.text_input(
+                                "新评测集名称",
+                                value=f"{selected_app['name']}-批量测试-{datetime.now().strftime('%m%d%H%M')}"
+                            )
+                        else:
+                            if datasets:
+                                target_ds = st.selectbox(
+                                    "保存到评测集",
+                                    datasets,
+                                    format_func=lambda x: x['name']
+                                )
+                        
+                        st.markdown("---")
+                        
+                        # Step 4: 执行
+                        st.markdown("#### 🚀 Step 4: 执行批量测试")
+                        
+                        if st.button("🚀 开始执行", type="primary", use_container_width=True):
+                            # 创建或获取评测集
+                            if create_new:
+                                dataset_id = DifyStore.create_dataset(
+                                    name=new_ds_name,
+                                    app_id=selected_app['id'],
+                                    source_type='batch'
+                                )
+                                st.info(f"已创建评测集: {new_ds_name}")
+                            else:
+                                dataset_id = target_ds['id']
+                            
+                            # 执行批量测试
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            results_container = st.empty()
+                            
+                            success_count = 0
+                            error_count = 0
+                            results_list = []
+                            
+                            from datetime import datetime
+                            
+                            for idx, row in df.iterrows():
+                                # 更新进度
+                                progress = (idx + 1) / len(df)
+                                progress_bar.progress(progress)
+                                status_text.text(f"执行中: {idx + 1}/{len(df)}")
+                                
+                                # 构建输入
+                                inputs = {}
+                                for col in df.columns:
+                                    if col != 'query':
+                                        inputs[col] = str(row[col]) if pd.notna(row[col]) else ""
+                                
+                                query = str(row.get('query', '')) if pd.notna(row.get('query', '')) else ''
+                                
+                                # 调用 Dify
+                                try:
+                                    if selected_app['app_type'] == 'workflow':
+                                        all_inputs = {**inputs}
+                                        if query:
+                                            all_inputs['query'] = query
+                                        result = client.run_workflow(all_inputs)
+                                        output = str(result.get('data', {}).get('outputs', ''))
+                                    else:
+                                        result = client.chat(query, inputs)
+                                        output = result.get('answer', '')
+                                    
+                                    if 'error' not in result:
+                                        # 保存记录
+                                        DifyStore.add_record(
+                                            dataset_id=dataset_id,
+                                            inputs=json.dumps(inputs, ensure_ascii=False),
+                                            query=query,
+                                            output=output,
+                                            source='batch',
+                                            total_tokens=result.get('data', {}).get('total_tokens', 0),
+                                            latency_ms=int(result.get('data', {}).get('elapsed_time', 0) * 1000)
+                                        )
+                                        success_count += 1
+                                        results_list.append({"row": idx + 1, "status": "✅", "output": output[:50]})
+                                    else:
+                                        error_count += 1
+                                        results_list.append({"row": idx + 1, "status": "❌", "output": result['error'][:50]})
+                                        
+                                except Exception as e:
+                                    error_count += 1
+                                    results_list.append({"row": idx + 1, "status": "❌", "output": str(e)[:50]})
+                            
+                            # 完成
+                            progress_bar.progress(1.0)
+                            status_text.empty()
+                            
+                            st.success(f"✅ 批量测试完成! 成功: {success_count}, 失败: {error_count}")
+                            
+                            # 显示结果
+                            results_df = pd.DataFrame(results_list)
+                            st.dataframe(results_df, use_container_width=True)
+                            
+                            # 自动评测
+                            if auto_eval and success_count > 0:
+                                st.info("正在执行自动评测...")
+                                from dify_eval_adapter import DifyEvalAdapter
+                                records = DifyStore.list_records(dataset_id, status='pending')
+                                record_ids = [r['id'] for r in records]
+                                if record_ids:
+                                    eval_results, eval_summary = DifyEvalAdapter.batch_evaluate(record_ids)
+                                    st.success(f"评测完成! 平均分: {eval_summary['avg_score']:.2f}")
+                                    
+                    except Exception as e:
+                        st.error(f"文件解析失败: {str(e)}")
+
+# ==========================================
+# 🆕 评测管理页面
+# ==========================================
+elif current_page == 'eval_dataset_management':
+    st.markdown('<h1 class="main-title">📋 评测管理</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">评测集管理 | 评测任务 | 重新评测</p>', unsafe_allow_html=True)
+    
+    from dify_store import DifyStore
+    
+    tab_datasets, tab_evaluate, tab_reevaluate = st.tabs(["📁 评测集", "⚡ 评测任务", "🔄 重新评测"])
+    
+    # ========== Tab 1: 评测集列表 ==========
+    with tab_datasets:
+        st.markdown("### 📁 评测集管理")
+        
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("➕ 创建评测集", use_container_width=True, type="primary"):
+                st.session_state['dataset_mode'] = 'create'
+                st.rerun()
+        
+        dataset_mode = st.session_state.get('dataset_mode', 'list')
+        
+        # 创建模式
+        if dataset_mode == 'create':
+            st.markdown("---")
+            st.markdown("#### ➕ 创建评测集")
+            
+            with st.form("create_dataset_form"):
+                name = st.text_input("评测集名称", placeholder="如：客服话术v2.1 - 2026年1月")
+                
+                # 关联 App
+                apps = DifyStore.list_apps()
+                app_options = [{"id": None, "name": "不关联 App"}] + apps
+                selected_app = st.selectbox(
+                    "关联 Dify App (可选)",
+                    app_options,
+                    format_func=lambda x: x['name']
+                )
+                
+                source_type = st.selectbox("来源类型", ["dify", "json_upload", "builtin"])
+                description = st.text_area("描述")
+                
+                col_save, col_cancel = st.columns(2)
+                with col_save:
+                    submitted = st.form_submit_button("💾 保存", type="primary", use_container_width=True)
+                with col_cancel:
+                    if st.form_submit_button("取消", use_container_width=True):
+                        st.session_state['dataset_mode'] = 'list'
+                        st.rerun()
+                
+                if submitted:
+                    if name:
+                        dataset_id = DifyStore.create_dataset(
+                            name=name,
+                            app_id=selected_app.get('id') if selected_app else None,
+                            source_type=source_type,
+                            description=description
+                        )
+                        st.success(f"✅ 评测集创建成功! ID: {dataset_id}")
+                        st.session_state['dataset_mode'] = 'list'
+                        st.rerun()
+                    else:
+                        st.error("请填写评测集名称")
+        
+        # 列表模式
+        else:
+            datasets = DifyStore.list_datasets()
+            
+            if not datasets:
+                st.info("暂无评测集，请点击「创建评测集」添加")
+            else:
+                st.markdown(f"**共 {len(datasets)} 个评测集:**")
+                
+                for ds in datasets:
+                    record_count = ds.get('record_count', 0)
+                    evaluated_count = ds.get('evaluated_count', 0)
+                    avg_score = ds.get('avg_score', 0) or 0
+                    
+                    with st.expander(f"📁 {ds['name']} ({record_count} 条记录)"):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("记录数", record_count)
+                        with col2:
+                            st.metric("已评测", evaluated_count)
+                        with col3:
+                            st.metric("平均分", f"{avg_score:.1f}/5" if avg_score else "-")
+                        
+                        st.markdown(f"**ID**: `{ds['id']}`")
+                        st.markdown(f"**来源**: {ds.get('source_type', 'dify')}")
+                        st.markdown(f"**创建时间**: {ds.get('created_at', 'N/A')}")
+                        
+                        # 查看记录
+                        if st.button("📜 查看记录", key=f"view_{ds['id']}"):
+                            st.session_state['selected_dataset'] = ds['id']
+                            st.session_state['current_page'] = 'eval_dataset_management'
+                            # 切换到评测任务 Tab
+                        
+                        # 删除按钮
+                        if st.button("🗑️ 删除", key=f"del_ds_{ds['id']}"):
+                            DifyStore.delete_dataset(ds['id'])
+                            st.success("评测集及其记录已删除")
+                            st.rerun()
+    
+    # ========== Tab 2: 评测任务 ==========
+    with tab_evaluate:
+        st.markdown("### ⚡ 评测任务")
+        st.caption("选择评测集 → 筛选记录 → 执行评测")
+        
+        datasets = DifyStore.list_datasets()
+        if not datasets:
+            st.warning("请先创建评测集")
+        else:
+            selected_ds = st.selectbox(
+                "选择评测集",
+                datasets,
+                format_func=lambda x: f"{x['name']} ({x.get('record_count', 0)} 条)",
+                key="eval_dataset_select"
+            )
+            
+            if selected_ds:
+                # 筛选条件
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    status_filter = st.selectbox("评测状态", ["全部", "pending", "completed", "failed"])
+                with col2:
+                    limit = st.number_input("显示条数", min_value=10, max_value=500, value=50)
+                
+                # 获取记录
+                records = DifyStore.list_records(
+                    selected_ds['id'],
+                    status=status_filter if status_filter != "全部" else None,
+                    limit=limit
+                )
+                
+                if not records:
+                    st.info("该评测集暂无记录")
+                else:
+                    st.markdown(f"**共 {len(records)} 条记录:**")
+                    
+                    # 显示记录表格
+                    import pandas as pd
+                    df_data = []
+                    for r in records:
+                        df_data.append({
+                            "ID": r['id'],
+                            "Query": (r.get('query', '') or '')[:50],
+                            "Output": (r.get('output', '') or '')[:50],
+                            "状态": r.get('eval_status', 'pending'),
+                            "评测次数": r.get('eval_count', 0),
+                            "创建时间": r.get('created_at', '')[:16]
+                        })
+                    
+                    df = pd.DataFrame(df_data)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    # 批量评测按钮
+                    st.markdown("---")
+                    
+                    # 选择评估器
+                    from evaluator_store import EvaluatorStore
+                    evaluators = EvaluatorStore.list_evaluators()
+                    selected_evaluator = st.selectbox(
+                        "选择评估器",
+                        evaluators,
+                        format_func=lambda x: f"{'⭐ ' if x.get('is_default') else ''}{x['name']} v{x['version']}",
+                        key="eval_evaluator_select"
+                    )
+                    
+                    col_eval, col_pending = st.columns(2)
+                    with col_eval:
+                        if st.button("🚀 执行批量评测", type="primary", use_container_width=True):
+                            from dify_eval_adapter import DifyEvalAdapter
+                            
+                            record_ids = [r['id'] for r in records]
+                            evaluator_id = selected_evaluator['evaluator_id'] if selected_evaluator else None
+                            
+                            # 显示进度
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            
+                            def update_progress(current, total):
+                                progress_bar.progress(current / total)
+                                status_text.text(f"评测进度: {current}/{total}")
+                            
+                            # 执行评测
+                            results, summary = DifyEvalAdapter.batch_evaluate(
+                                record_ids, 
+                                evaluator_id,
+                                progress_callback=update_progress
+                            )
+                            
+                            progress_bar.progress(1.0)
+                            status_text.empty()
+                            
+                            # 显示结果
+                            st.success(f"✅ 评测完成! 成功: {summary['success']}, 失败: {summary['error']}, 平均分: {summary['avg_score']:.2f}")
+                            
+                            # 刷新页面
+                            st.rerun()
+                    
+                    with col_pending:
+                        pending_count = len([r for r in records if r.get('eval_status') == 'pending'])
+                        st.info(f"待评测: {pending_count} 条")
+    
+    # ========== Tab 3: 重新评测 ==========
+    with tab_reevaluate:
+        st.markdown("### 🔄 重新评测")
+        st.caption("选择已评测的记录，使用新评估器重新评测")
+        
+        datasets = DifyStore.list_datasets()
+        if not datasets:
+            st.warning("请先创建评测集")
+        else:
+            selected_ds = st.selectbox(
+                "选择评测集",
+                datasets,
+                format_func=lambda x: f"{x['name']}",
+                key="reevaluate_dataset_select"
+            )
+            
+            if selected_ds:
+                # 只显示已评测的记录
+                completed_records = DifyStore.list_records(
+                    selected_ds['id'],
+                    status='completed',
+                    limit=100
+                )
+                
+                if not completed_records:
+                    st.info("暂无已评测的记录")
+                else:
+                    st.markdown(f"**共 {len(completed_records)} 条已评测记录:**")
+                    
+                    # 显示记录
+                    for r in completed_records[:10]:
+                        latest = DifyStore.get_latest_evaluation(r['id']) if hasattr(DifyStore, 'get_latest_evaluation') else None
+                        score_display = f"⭐{latest['avg_score']:.1f}" if latest else "-"
+                        
+                        with st.expander(f"{r['id']} | {(r.get('query', '')[:30] or 'N/A')}... | {score_display}"):
+                            st.markdown(f"**评测次数**: {r.get('eval_count', 0)}")
+                            if latest:
+                                st.json(json.loads(latest.get('scores', '{}')))
+                            
+                            if st.button("🔄 重新评测", key=f"re_{r['id']}"):
+                                from dify_eval_adapter import DifyEvalAdapter
+                                result = DifyEvalAdapter.run_evaluation(r['id'])
+                                if result['status'] == 'success':
+                                    st.success(f"重新评测完成! 新分数: {result['avg_score']:.2f}")
+                                else:
+                                    st.error(f"评测失败: {result.get('error_message', '未知错误')}")
+
+# ==========================================
+# 🆕 报告中心页面
+# ==========================================
+elif current_page == 'report_center':
+    st.markdown('<h1 class="main-title">📝 报告中心</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">可配置字段导出 | 多格式支持</p>', unsafe_allow_html=True)
+    
+    from dify_store import DifyStore
+    import pandas as pd
+    
+    st.markdown("### 📊 导出评测报告")
+    
+    # 选择评测集
+    datasets = DifyStore.list_datasets()
+    if not datasets:
+        st.warning("请先创建评测集并添加记录")
+    else:
+        selected_ds = st.selectbox(
+            "选择评测集",
+            datasets,
+            format_func=lambda x: f"{x['name']} ({x.get('record_count', 0)} 条)",
+            key="report_dataset_select"
+        )
+        
+        if selected_ds:
+            st.markdown("---")
+            
+            # 配置导出字段
+            st.markdown("#### 📋 选择导出字段")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**基础信息**")
+                include_id = st.checkbox("记录 ID", value=True)
+                include_query = st.checkbox("用户问题 (Query)", value=True)
+                include_output = st.checkbox("AI 回答 (Output)", value=True)
+                include_inputs = st.checkbox("输入参数 (Inputs)", value=False)
+                include_source = st.checkbox("来源", value=False)
+                include_created = st.checkbox("创建时间", value=True)
+            
+            with col2:
+                st.markdown("**评测信息**")
+                include_status = st.checkbox("评测状态", value=True)
+                include_eval_count = st.checkbox("评测次数", value=False)
+                include_scores = st.checkbox("各维度分数", value=True)
+                include_avg_score = st.checkbox("平均分", value=True)
+                include_reasonings = st.checkbox("评测理由", value=False)
+            
+            st.markdown("---")
+            
+            # 筛选条件
+            st.markdown("#### 🔍 筛选条件")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                status_filter = st.selectbox("评测状态", ["全部", "pending", "completed", "failed"], key="report_status")
+            with col2:
+                limit = st.number_input("最大记录数", min_value=10, max_value=1000, value=100, key="report_limit")
+            
+            st.markdown("---")
+            
+            # 导出格式
+            st.markdown("#### 📁 导出格式")
+            
+            export_format = st.radio(
+                "选择格式",
+                ["CSV", "Excel", "JSON"],
+                horizontal=True
+            )
+            
+            # 预览和导出
+            st.markdown("---")
+            
+            if st.button("📊 生成报告", type="primary", use_container_width=True):
+                # 获取数据
+                records = DifyStore.list_records(
+                    selected_ds['id'],
+                    status=status_filter if status_filter != "全部" else None,
+                    limit=limit
+                )
+                
+                if not records:
+                    st.warning("暂无匹配的记录")
+                else:
+                    # 构建导出数据
+                    export_data = []
+                    
+                    for r in records:
+                        row = {}
+                        
+                        if include_id:
+                            row['ID'] = r['id']
+                        if include_query:
+                            row['Query'] = r.get('query', '')
+                        if include_output:
+                            row['Output'] = r.get('output', '')
+                        if include_inputs:
+                            row['Inputs'] = r.get('inputs', '')
+                        if include_source:
+                            row['Source'] = r.get('source', '')
+                        if include_created:
+                            row['Created'] = r.get('created_at', '')
+                        if include_status:
+                            row['Status'] = r.get('eval_status', '')
+                        if include_eval_count:
+                            row['EvalCount'] = r.get('eval_count', 0)
+                        
+                        # 获取评测结果
+                        if include_scores or include_avg_score or include_reasonings:
+                            latest = DifyStore.get_latest_evaluation(r['id'])
+                            if latest:
+                                if include_avg_score:
+                                    row['AvgScore'] = latest.get('avg_score', 0)
+                                if include_scores:
+                                    row['Scores'] = latest.get('scores', '{}')
+                                if include_reasonings:
+                                    row['Reasonings'] = latest.get('reasonings', '{}')
+                            else:
+                                if include_avg_score:
+                                    row['AvgScore'] = None
+                                if include_scores:
+                                    row['Scores'] = None
+                                if include_reasonings:
+                                    row['Reasonings'] = None
+                        
+                        export_data.append(row)
+                    
+                    # 转换为 DataFrame
+                    df = pd.DataFrame(export_data)
+                    
+                    # 显示预览
+                    st.markdown("#### 📋 预览")
+                    st.dataframe(df.head(10), use_container_width=True)
+                    
+                    st.markdown(f"**共 {len(df)} 条记录**")
+                    
+                    # 导出按钮
+                    st.markdown("---")
+                    
+                    filename = f"report_{selected_ds['name']}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+                    
+                    if export_format == "CSV":
+                        csv_data = df.to_csv(index=False, encoding='utf-8-sig')
+                        st.download_button(
+                            label="📥 下载 CSV",
+                            data=csv_data,
+                            file_name=f"{filename}.csv",
+                            mime="text/csv"
+                        )
+                    elif export_format == "Excel":
+                        # 使用 BytesIO 生成 Excel
+                        from io import BytesIO
+                        output = BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            df.to_excel(writer, index=False, sheet_name='Report')
+                        excel_data = output.getvalue()
+                        st.download_button(
+                            label="📥 下载 Excel",
+                            data=excel_data,
+                            file_name=f"{filename}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    else:  # JSON
+                        json_data = df.to_json(orient='records', force_ascii=False, indent=2)
+                        st.download_button(
+                            label="📥 下载 JSON",
+                            data=json_data,
+                            file_name=f"{filename}.json",
+                            mime="application/json"
+                        )
 
 # ==========================================
 # 页脚
