@@ -252,20 +252,23 @@ def handle_trace_create(body: Dict, timestamp: str, dify_app: Dict = None):
                     )
                     dataset_name = f"{dify_app['name']}-评测集"
             else:
-                # 静态凭证：使用默认评测集
+                # 🆕 静态凭证：按工作流名称（trace name）创建评测集
+                workflow_name = name  # name 来自 trace body
+                target_dataset_name = f"{workflow_name}-评测集"
+                
                 datasets = DifyStore.list_datasets()
-                # 查找或创建默认评测集
-                default_ds = next((d for d in datasets if d['name'] == 'Dify-默认评测集'), None)
-                if default_ds:
-                    dataset_id = default_ds['id']
-                    dataset_name = default_ds['name']
+                workflow_ds = next((d for d in datasets if d['name'] == target_dataset_name), None)
+                
+                if workflow_ds:
+                    dataset_id = workflow_ds['id']
+                    dataset_name = workflow_ds['name']
                 else:
                     dataset_id = DifyStore.create_dataset(
-                        name='Dify-默认评测集',
+                        name=target_dataset_name,
                         source_type='dify',
-                        description='静态凭证数据的默认存储评测集'
+                        description=f'工作流 "{workflow_name}" 的评测数据'
                     )
-                    dataset_name = 'Dify-默认评测集'
+                    dataset_name = target_dataset_name
             
             # 存入记录
             record_id = DifyStore.add_record(

@@ -267,6 +267,49 @@ def detect_type():
         return jsonify({'error': str(e)}), 500
 
 
+# ==========================================
+# 🆕 评测集 API (供前端调用)
+# ==========================================
+
+@app.route('/api/v1/datasets', methods=['GET'])
+def get_datasets():
+    """
+    获取评测集列表
+    
+    Response: {"datasets": [...]}
+    """
+    try:
+        from dify_store import DifyStore
+        datasets = DifyStore.list_datasets()
+        return jsonify({'datasets': datasets})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/v1/datasets/<dataset_id>/records', methods=['GET'])
+def get_dataset_records(dataset_id):
+    """
+    获取评测集的记录
+    
+    Response: {"records": [...]}
+    """
+    try:
+        from dify_store import DifyStore
+        records = DifyStore.list_records(dataset_id)
+        return jsonify({'records': records})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==========================================
+# 工厂函数（用于测试）
+# ==========================================
+
+def create_app():
+    """创建 Flask 应用实例（用于测试）"""
+    return app
+
+
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
@@ -277,6 +320,7 @@ if __name__ == '__main__':
     print("   POST /api/v1/eval/unified - 统一评测")
     print("   GET  /api/v1/traces       - 列出 Trace")
     print("   GET  /api/v1/stats        - 统计数据")
+    print("   GET  /api/v1/datasets     - 评测集列表")
     print("")
     print("🔌 Langfuse 兼容 (Dify 集成):")
     print("   POST /api/public/ingestion - Langfuse 格式数据摄入")
@@ -288,4 +332,5 @@ if __name__ == '__main__':
     print(f"   Host: http://localhost:{port}")
     print("")
     app.run(host='0.0.0.0', port=port, debug=(port == 5000))
+
 
