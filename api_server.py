@@ -301,6 +301,65 @@ def get_dataset_records(dataset_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/v1/evaluate', methods=['POST'])
+def evaluate_record():
+    """
+    执行单条记录评测
+    
+    Request: {"record_id": "xxx", "evaluator_id": "yyy"}
+    Response: {"success": true, "result": {...}}
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data'}), 400
+        
+        record_id = data.get('record_id')
+        evaluator_id = data.get('evaluator_id')
+        
+        if not record_id:
+            return jsonify({'success': False, 'error': 'record_id required'}), 400
+        
+        from dify_store import DifyStore
+        from evaluator_store import EvaluatorStore
+        from eval_dispatcher import run_evaluation_task
+        
+        # 获取记录
+        records = DifyStore.list_records(record_id[:8])  # dataset_id 是前 8 位
+        record = next((r for r in records if r['id'] == record_id), None)
+        
+        if not record:
+            # 尝试直接获取
+            import sqlite3
+            from dify_store import DB_PATH
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM dataset_records WHERE id = ?", (record_id,))
+            row = cur.fetchone()
+            conn.close()
+            
+            if row:
+                record = dict(row)
+            else:
+                return jsonify({'success': False, 'error': 'Record not found'}), 404
+        
+        # 执行评测
+        eval_result = run_evaluation_task(
+            input_text=record.get('query', ''),
+            output_text=record.get('output', ''),
+            evaluator_id=evaluator_id
+        )
+        
+        return jsonify({
+            'success': True,
+            'result': eval_result
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ==========================================
 # 工厂函数（用于测试）
 # ==========================================

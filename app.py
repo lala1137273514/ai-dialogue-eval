@@ -3192,16 +3192,11 @@ elif current_page == 'dify_management':
                         # 操作按钮
                         col_dataset, col_test, col_del = st.columns(3)
                         
-                        # 🆕 打开评测集按钮
+                        # 🆕 打开评测集按钮（跳转到评测管理页面，从 API 获取数据）
                         with col_dataset:
-                            datasets = DifyStore.list_datasets(app_id=app['id'])
-                            if datasets:
-                                if st.button("📋 打开评测集", key=f"dataset_{app['id']}", type="primary"):
-                                    st.session_state['selected_dataset'] = datasets[0]['id']
-                                    st.session_state['current_page'] = 'eval_dataset_management'
-                                    st.rerun()
-                            else:
-                                st.caption("暂无评测集")
+                            if st.button("📋 评测管理", key=f"dataset_{app['id']}", type="primary"):
+                                st.session_state['current_page'] = 'dify_eval_management'
+                                st.rerun()
                         
                         with col_test:
                             if st.button("🔗 测试Dify", key=f"test_{app['id']}"):
@@ -3992,8 +3987,84 @@ elif current_page == 'report_center':
                         )
 
 # ==========================================
+# ==========================================
+# 🆕 Dify 评测管理页面（从 API 获取数据）
+# ==========================================
+elif current_page == 'dify_eval_management':
+    st.markdown('<h1 class="main-title">📊 评测管理</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">管理 Dify 工作流评测集 | 从 API 服务器获取数据</p>', unsafe_allow_html=True)
+    
+    from api_client import get_api_client
+    
+    # 获取评测集列表
+    api_client = get_api_client()
+    
+    with st.spinner("从 API 获取评测集..."):
+        datasets = api_client.get_datasets()
+    
+    if not datasets:
+        st.warning("暂无评测集。请先在 Dify 中执行工作流，数据将自动创建评测集。")
+        if st.button("🔄 刷新"):
+            st.rerun()
+    else:
+        st.success(f"✅ 获取到 {len(datasets)} 个评测集")
+        
+        # 评测集选择
+        dataset_options = {d['name']: d['id'] for d in datasets}
+        selected_name = st.selectbox("选择评测集", list(dataset_options.keys()))
+        selected_id = dataset_options[selected_name]
+        
+        # 显示评测集详情
+        selected_dataset = next(d for d in datasets if d['id'] == selected_id)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("记录数", selected_dataset.get('record_count', 0))
+        with col2:
+            st.metric("已评测", selected_dataset.get('evaluated_count', 0))
+        with col3:
+            avg_score = selected_dataset.get('avg_score', 0)
+            st.metric("平均分", f"{avg_score:.2f}" if avg_score else "N/A")
+        
+        st.markdown("---")
+        
+        # 获取记录
+        with st.spinner("加载记录..."):
+            records = api_client.get_records(selected_id)
+        
+        if records:
+            st.markdown(f"### 📋 记录列表 ({len(records)} 条)")
+            
+            for i, record in enumerate(records[:20]):  # 限制显示前 20 条
+                with st.expander(f"记录 {i+1}: {record.get('query', '')[:50]}...", expanded=False):
+                    st.markdown(f"**ID**: `{record['id']}`")
+                    st.markdown(f"**输入**: {record.get('query', 'N/A')}")
+                    st.markdown(f"**输出**: {record.get('output', 'N/A')[:500]}...")
+                    
+                    eval_status = record.get('eval_status', 'pending')
+                    if eval_status == 'completed':
+                        st.success(f"✅ 已评测 | 分数: {record.get('eval_score', 'N/A')}")
+                    else:
+                        if st.button(f"🔍 评测此记录", key=f"eval_{record['id']}"):
+                            with st.spinner("评测中..."):
+                                result = api_client.evaluate_record(record['id'], None)
+                                if result.get('success'):
+                                    st.success(f"评测完成！分数: {result['result'].get('avg_score', 'N/A')}")
+                                else:
+                                    st.error(f"评测失败: {result.get('error')}")
+        else:
+            st.info("该评测集暂无记录")
+        
+        # 返回按钮
+        st.markdown("---")
+        if st.button("← 返回 Dify 管理"):
+            st.session_state['current_page'] = 'dify_management'
+            st.rerun()
+
+# ==========================================
 # 页脚
 # ==========================================
 if not st.session_state.get('show_demo', False):
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.caption("AI 对话评测系统 Pro v3.0 | 支持工作流节点溯源 | Powered by LLM-as-a-Judge")
+
